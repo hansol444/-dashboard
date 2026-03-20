@@ -1,0 +1,395 @@
+// ──────────────────────────────────────────────────────────────
+// worxphere-auto / fill.js
+// Worxphere 전자결재 자동 입력 & 제출 스크립트
+//
+// 사용법:
+//   node fill.js <문서유형> [옵션]
+//
+// 문서유형:
+//   ats-b      ATS 인터뷰 기프티콘  — 예산품의
+//   ats-p      ATS 인터뷰 기프티콘  — 구매품의
+//   survey-b   Placement Survey    — 예산품의
+//   survey-p   Placement Survey    — 구매품의
+//   free-b     산학협력 프리랜서     — 예산품의
+//   free-p     산학협력 프리랜서     — 구매품의
+//
+// 옵션 예시:
+//   node fill.js ats-b --nq 15 --sq 8 --mon 202604
+//   node fill.js survey-b --yr 2026
+//   node fill.js free-p --sup EGI --st 2026/4/1 --en 2026/5/16
+//   node fill.js survey-b --dry-run   # 입력만 하고 제출 안 함
+// ──────────────────────────────────────────────────────────────
+
+require('dotenv').config();
+const { chromium } = require('playwright');
+const argv = require('minimist')(process.argv.slice(2));
+const TEMPLATES = require('./config/templates');
+
+const URLS = {
+  login:  'https://eda.jobkorea.co.kr/Account/Login',
+  docReg: 'https://eda.jobkorea.co.kr/Eda/DocReg',
+};
+
+// ── 유틸 ──────────────────────────────────────────────────────
+
+function log(msg)  { console.log(`\n[✓] ${msg}`); }
+function warn(msg) { console.log(`[!] ${msg}`); }
+function err(msg)  { console.error(`\n[✗] ${msg}`); }
+
+function usage() {
+  console.log(`
+사용법: node fill.js <문서유형> [옵션]
+
+문서유형:
+  ats-b      ATS 기프티콘 예산품의   (--nq 수량 --sq 수량 --mon YYYYMM --si 시행일)
+  ats-p      ATS 기프티콘 구매품의   (--nq 수량 --sq 수량)
+  survey-b   Survey 예산품의        (--yr YYYY)
+  survey-p   Survey 구매품의        (--yr YYYY)
+  free-b     프리랜서 예산품의       (--amt 금액 --mon YYYYMM)
+  free-p     프리랜서 구매품의       (--sup 공급사 --st 시작일 --en 종료일)
+
+공통 옵션:
+  --dry-run   폼 입력 후 제출하지 않고 일시정지 (검토용)
+  --headless  브라우저 창 없이 실행 (기본: 창 띄움)
+`);
+}
+
+// ── 메인 ──────────────────────────────────────────────────────
+
+async function main() {
+  const docType = argv._[0];
+
+  if (!docType || !TEMPLATES[docType]) {
+    err(`문서유형이 잘못되었습니다: "${docType ?? ''}"`);
+    usage();
+    process.exit(1);
+  }
+
+  const id = process.env.WORXPHERE_ID;
+  const pw = process.env.WORXPHERE_PW;
+
+  if (!id || !pw) {
+    err('.env 파일에 WORXPHERE_ID / WORXPHERE_PW가 설정되지 않았습니다.');
+    err('.env.example을 복사해 .env로 만들고 값을 채워주세요.');
+    process.exit(1);
+  }
+
+  const isDryRun  = !!argv['dry-run'];
+  const isHeadless = !!argv['headless'];
+
+  // 템플릿 데이터 생성
+  const data = TEMPLATES[docType](argv);
+
+  console.log('\n══════════════════════════════════════════════');
+  console.log(` Worxphere 전자결재 자동화`);
+  console.log(` 문서유형: ${docType}  |  ${isDryRun ? '검토 모드 (제출 안 함)' : '제출 모드'}`);
+  console.log('══════════════════════════════════════════════\n');
+
+  const browser = await chromium.launch({
+    headless: isHeadless,
+    slowMo: 80,  // 각 동작 사이 80ms 딜레이 (자연스러운 속도)
+  });
+
+  const page = await browser.newPage();
+  page.setDefaultTimeout(20000);
+
+  try {
+    // ── 1. 로그인 ────────────────────────────────────────────
+    log('로그인 중...');
+    await page.goto(URLS.login, { waitUntil: 'domcontentloaded' });
+
+    // ID/PW 필드 — 실제 name/id 속성은 사이트에 따라 다를 수 있음
+    await page.fill('input[name="UserId"], input[id="UserId"], input[type="text"]', id);
+    await page.fill('input[name="Password"], input[id="Password"], input[type="password"]', pw);
+    await page.click('button[type="submit"], input[type="submit"]');
+    await page.waitForURL(/(?!.*Login).*/, { timeout: 15000 });
+    log('로그인 성공');
+
+    // ── 2. 문건등록 페이지 이동 ──────────────────────────────
+    log('문건등록 페이지 이동 중...');
+    await page.goto(URLS.docReg, { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle');
+
+    // ── 3. 기본 정보 입력 ────────────────────────────────────
+    log('기본 정보 입력 중...');
+    await fillBasicInfo(page, data.기본);
+
+    // ── 4. 예산 연동 or 구매품의 테이블 입력 ────────────────
+    if (data.예산연동) {
+      log('예산 연동 테이블 입력 중...');
+      await fillBudgetTable(page, data.예산연동);
+    }
+
+    if (data.구매품의) {
+      log('구매품의 양식 입력 중...');
+      await fillPurchaseForm(page, data.구매품의);
+    }
+
+    // ── 5. 본문 입력 ─────────────────────────────────────────
+    if (data.본문) {
+      log('본문 입력 중...');
+      await fillBody(page, data.본문);
+    }
+
+    // ── 6. 제출 or 일시정지 ──────────────────────────────────
+    if (isDryRun) {
+      warn('--dry-run 모드: 입력 완료. 직접 확인 후 제출하세요.');
+      warn('브라우저를 닫으면 스크립트가 종료됩니다.');
+      await page.waitForEvent('close', { timeout: 300000 }); // 5분 대기
+    } else {
+      log('결재 상신(제출) 중...');
+      await submitDoc(page);
+      log('🎉 제출 완료!');
+    }
+
+  } catch (e) {
+    err(`오류 발생: ${e.message}`);
+    warn('스크린샷 저장: error_screenshot.png');
+    await page.screenshot({ path: 'error_screenshot.png' });
+    await browser.close();
+    process.exit(1);
+  }
+
+  await browser.close();
+}
+
+// ── 기본 정보 입력 ────────────────────────────────────────────
+
+async function fillBasicInfo(page, info) {
+
+  // 문건제목
+  await page.fill(
+    'input[id*="DocTitle"], input[name*="DocTitle"], input[placeholder*="문건제목"]',
+    info.문건제목
+  );
+
+  // 읽기권한 — 라디오 버튼 or 셀렉트
+  await clickOrSelect(page, info.읽기권한, [
+    'input[type="radio"]',
+    'select[id*="ReadAuth"], select[name*="ReadAuth"]',
+  ]);
+
+  // 문건분류 검색 → 선택
+  const searchBtn = page.locator(
+    'button:has-text("검색"), a:has-text("검색"), input[value="검색"]'
+  ).first();
+  await searchBtn.click();
+  await page.waitForTimeout(800);
+
+  // 검색창에 키워드 입력
+  const searchInput = page.locator('input[id*="search"], input[placeholder*="검색"]').last();
+  await searchInput.fill(info.문건분류검색);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(600);
+
+  // 결과 목록에서 일치하는 항목 클릭
+  const classItem = page.locator(`text="${info.문건분류선택}"`).first();
+  if (await classItem.count() > 0) {
+    await classItem.click();
+  } else {
+    warn(`문건분류 항목을 찾지 못했습니다: ${info.문건분류선택}`);
+    warn('수동으로 선택해주세요. 5초 후 계속...');
+    await page.waitForTimeout(5000);
+  }
+
+  // 시행일 (비어있으면 스킵)
+  if (info.시행일) {
+    const siField = page.locator(
+      'input[id*="ExecDate"], input[name*="ExecDate"], input[placeholder*="시행일"]'
+    ).first();
+    if (await siField.count() > 0) {
+      await siField.fill(info.시행일);
+    }
+  }
+}
+
+// ── 예산 연동 테이블 입력 ─────────────────────────────────────
+
+async function fillBudgetTable(page, rows) {
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+
+    // 행 추가 버튼 (두 번째 행부터)
+    if (i > 0) {
+      const addBtn = page.locator(
+        'button:has-text("행 추가"), button:has-text("+"), a:has-text("행추가")'
+      ).first();
+      if (await addBtn.count() > 0) await addBtn.click();
+      await page.waitForTimeout(400);
+    }
+
+    const sel = `tr:nth-child(${i + 1})`;
+
+    // 구분
+    const 구분sel = page.locator(`${sel} select[name*="BudgetType"], ${sel} select`).first();
+    if (await 구분sel.count() > 0) {
+      await 구분sel.selectOption({ label: row.구분 });
+    }
+
+    // FROM
+    await fillBudgetCell(page, sel, 'From', row.from);
+    // TO
+    await fillBudgetCell(page, sel, 'To', row.to);
+  }
+}
+
+async function fillBudgetCell(page, rowSel, dir, cell) {
+  const base = `${rowSel} [id*="${dir}"], ${rowSel} [name*="${dir}"]`;
+
+  const 신청월 = page.locator(`input${base}Month, input[name*="${dir}Month"]`).first();
+  if (await 신청월.count() > 0) await 신청월.fill(String(cell.신청월));
+
+  const cc = page.locator(`input${base}CostCenter, input[name*="${dir}CostCenter"]`).first();
+  if (await cc.count() > 0) await cc.fill(String(cell.코스트센터));
+
+  const gl = page.locator(`input${base}Account, input[name*="${dir}Account"]`).first();
+  if (await gl.count() > 0) await gl.fill(String(cell.GL계정));
+
+  const amt = page.locator(`input${base}Amount, input[name*="${dir}Amount"]`).first();
+  if (await amt.count() > 0) await amt.fill(String(cell.금액));
+}
+
+// ── 구매품의 양식 입력 ────────────────────────────────────────
+
+async function fillPurchaseForm(page, form) {
+
+  // 요청유형
+  await clickOrSelect(page, form.요청유형, [
+    'input[type="radio"][name*="ReqType"]',
+    'select[name*="ReqType"]',
+  ]);
+
+  // 계약유무
+  await clickOrSelect(page, form.계약유무, [
+    'input[type="radio"][name*="Contract"]',
+    'select[name*="Contract"]',
+  ]);
+
+  // 공급사
+  const supplierField = page.locator(
+    'input[name*="Supplier"], input[id*="Supplier"], input[placeholder*="공급사"]'
+  ).first();
+  if (await supplierField.count() > 0) await supplierField.fill(form.공급사);
+
+  // 계약기간
+  if (form.계약기간) {
+    const periodField = page.locator(
+      'input[name*="ContractPeriod"], input[placeholder*="계약기간"]'
+    ).first();
+    if (await periodField.count() > 0) await periodField.fill(form.계약기간);
+  }
+
+  // 품목 테이블
+  for (let i = 0; i < form.품목.length; i++) {
+    const item = form.품목[i];
+
+    if (i > 0) {
+      const addBtn = page.locator(
+        'button:has-text("행 추가"), button:has-text("+행"), a:has-text("행추가")'
+      ).first();
+      if (await addBtn.count() > 0) await addBtn.click();
+      await page.waitForTimeout(300);
+    }
+
+    const rowSel = `table tr:nth-child(${i + 2})`; // 헤더 제외
+
+    const nameCell = page.locator(`${rowSel} input[name*="ItemName"], ${rowSel} input`).first();
+    if (await nameCell.count() > 0 && item.품목명) await nameCell.fill(item.품목명);
+
+    const qtyCell = page.locator(`${rowSel} input[name*="Qty"]`).first();
+    if (await qtyCell.count() > 0 && item.수량 != null) await qtyCell.fill(String(item.수량));
+
+    const unitCell = page.locator(`${rowSel} input[name*="Unit"]`).first();
+    if (await unitCell.count() > 0 && item.단위) await unitCell.fill(item.단위);
+
+    const priceCell = page.locator(`${rowSel} input[name*="UnitPrice"]`).first();
+    if (await priceCell.count() > 0 && item.단가 != null) await priceCell.fill(String(item.단가));
+
+    const costCell = page.locator(`${rowSel} input[name*="Cost"], ${rowSel} input[name*="Amount"]`).last();
+    if (await costCell.count() > 0) await costCell.fill(String(item.비용));
+  }
+}
+
+// ── 본문(에디터) 입력 ─────────────────────────────────────────
+
+async function fillBody(page, bodyText) {
+  // TinyMCE / 일반 textarea 모두 대응
+  const iframe = page.frameLocator('iframe[id*="mce"], iframe[id*="editor"]').first();
+  const editorBody = iframe.locator('body');
+
+  if (await editorBody.count() > 0) {
+    // TinyMCE rich text editor
+    await editorBody.click();
+    await editorBody.fill(bodyText);
+  } else {
+    // 일반 textarea
+    const ta = page.locator('textarea[name*="Content"], textarea[id*="Content"]').first();
+    if (await ta.count() > 0) {
+      await ta.fill(bodyText);
+    } else {
+      warn('본문 입력 필드를 찾지 못했습니다. 수동으로 붙여넣기 해주세요.');
+    }
+  }
+}
+
+// ── 제출 ──────────────────────────────────────────────────────
+
+async function submitDoc(page) {
+  // "문건등록" 또는 "상신" 버튼
+  const submitBtn = page.locator(
+    'button:has-text("문건등록"), button:has-text("상신"), input[value*="등록"], input[value*="상신"]'
+  ).first();
+
+  if (await submitBtn.count() === 0) {
+    warn('제출 버튼을 찾지 못했습니다. 수동으로 제출해주세요.');
+    await page.waitForTimeout(10000);
+    return;
+  }
+
+  await submitBtn.click();
+
+  // 확인 팝업 처리
+  page.on('dialog', async (dialog) => {
+    log(`팝업: "${dialog.message()}" → 확인`);
+    await dialog.accept();
+  });
+
+  // 제출 완료 대기
+  await page.waitForTimeout(2000);
+}
+
+// ── 범용 클릭/선택 헬퍼 ──────────────────────────────────────
+
+async function clickOrSelect(page, value, selectors) {
+  for (const sel of selectors) {
+    const els = page.locator(sel);
+    const count = await els.count();
+    if (count === 0) continue;
+
+    const tag = await els.first().evaluate(el => el.tagName.toLowerCase());
+
+    if (tag === 'select') {
+      await els.first().selectOption({ label: value });
+      return;
+    }
+
+    if (tag === 'input') {
+      // 라디오: 텍스트 인근 label 매칭
+      for (let i = 0; i < count; i++) {
+        const radio = els.nth(i);
+        const label = await radio.evaluate(el => {
+          const lbl = el.labels?.[0]?.textContent ?? el.parentElement?.textContent ?? '';
+          return lbl.trim();
+        });
+        if (label.includes(value)) {
+          await radio.click();
+          return;
+        }
+      }
+    }
+  }
+  warn(`"${value}" 옵션을 자동으로 선택하지 못했습니다. 수동 확인 필요.`);
+}
+
+// ─────────────────────────────────────────────────────────────
+main();
