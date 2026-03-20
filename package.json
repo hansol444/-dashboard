@@ -1,14 +1,16 @@
 {
   "name": "worxphere-auto",
   "version": "1.0.0",
-  "description": "Worxphere 전자결재 자동화",
+  "description": "Worxphere \uc804\uc790\uacb0\uc7ac \uc790\ub3d9\ud654",
   "main": "fill.js",
   "scripts": {
-    "install-browser": "npx playwright install chromium"
+    "install-browser": "npx playwright install chromium",
+    "start": "node server.js"
   },
   "dependencies": {
     "playwright": "^1.43.0",
     "dotenv": "^16.4.5",
-    "minimist": "^1.2.8"
+    "minimist": "^1.2.8",
+    "express": "^4.18.2"
   }
 }

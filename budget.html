@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>전자결재 자동화</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f12;
+    --surface: #1a1a20;
+    --surface2: #22222a;
+    --border: #2e2e38;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --green: #43e97b;
+    --amber: #f7b731;
+    --teal: #26d0ce;
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px 24px;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .header p {
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 300;
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+    margin-bottom: 16px;
+    letter-spacing: 0.5px;
+  }
+
+  .badge-purple { background: rgba(108,99,255,0.15); color: #a89fff; border: 1px solid rgba(108,99,255,0.3); }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .tab {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .tab:hover { border-color: var(--accent); color: var(--text); }
+
+  .tab.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .tab-icon { margin-right: 6px; }
+
+  .panels { max-width: 720px; margin: 0 auto; }
+
+  .panel { display: none; }
+  .panel.active { display: block; animation: fadeIn 0.2s ease; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .dot-purple { background: var(--accent); }
+  .dot-pink { background: var(--accent2); }
+  .dot-green { background: var(--green); }
+  .dot-amber { background: var(--amber); }
+  .dot-teal { background: var(--teal); }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+
+  .form-row.single { grid-template-columns: 1fr; }
+  .form-row.triple { grid-template-columns: 1fr 1fr 1fr; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+
+  label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  input, select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+
+  input:focus, select:focus { border-color: var(--accent); }
+  select option { background: var(--surface2); }
+
+  .hint {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .subtype-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .subtype-btn {
+    flex: 1;
+    padding: 9px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+
+  .subtype-btn:hover { border-color: var(--accent); color: var(--text); }
+  .subtype-btn.active { background: rgba(108,99,255,0.15); border-color: var(--accent); color: #a89fff; }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 20px 0;
+  }
+
+  .generate-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: -0.2px;
+  }
+
+  .generate-btn:hover { background: #7c75ff; transform: translateY(-1px); }
+  .generate-btn:active { transform: translateY(0); }
+
+  .btn-row { display: flex; gap: 10px; }
+  .btn-row .generate-btn { flex: 1; }
+
+  .run-btn {
+    flex: 1.5;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    background: var(--green);
+    color: #0f1a0f;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: -0.2px;
+  }
+  .run-btn:hover { background: #5ff07a; transform: translateY(-1px); }
+  .run-btn:active { transform: translateY(0); }
+  .run-btn:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; transform: none; }
+
+  .run-status {
+    margin-top: 12px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    display: none;
+  }
+  .run-status.running { display: block; background: rgba(108,99,255,0.1); border: 1px solid rgba(108,99,255,0.2); color: #a89fff; }
+  .run-status.success { display: block; background: rgba(67,233,123,0.08); border: 1px solid rgba(67,233,123,0.2); color: var(--green); }
+  .run-status.error { display: block; background: rgba(255,101,132,0.08); border: 1px solid rgba(255,101,132,0.2); color: var(--accent2); }
+
+  .output-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-top: 16px;
+    display: none;
+  }
+
+  .output-card.show { display: block; animation: fadeIn 0.2s ease; }
+
+  .output-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .copy-btn {
+    padding: 4px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .copy-btn.copied { border-color: var(--green); color: var(--green); }
+
+  .output-cmd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--green);
+    word-break: break-all;
+    line-height: 1.6;
+  }
+
+  .output-preview {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+
+  .preview-row { display: flex; gap: 8px; }
+  .preview-key { color: var(--muted); min-width: 100px; }
+  .preview-val { color: var(--text); }
+
+  .notice {
+    background: rgba(247,183,49,0.08);
+    border: 1px solid rgba(247,183,49,0.2);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 12px;
+    color: var(--amber);
+    margin-top: 12px;
+    line-height: 1.6;
+  }
+
+  .file-drop {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .file-drop:hover, .file-drop.dragover {
+    border-color: var(--accent);
+    background: rgba(108,99,255,0.05);
+  }
+
+  .file-drop input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+
+  .file-drop-text { color: var(--muted); font-size: 13px; pointer-events: none; }
+  .file-drop-text strong { color: var(--accent); }
+
+  .file-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+
+  .file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface2);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  .file-item-name { color: var(--teal); font-family: 'JetBrains Mono', monospace; }
+
+  .file-remove {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 4px;
+    line-height: 1;
+  }
+  .file-remove:hover { color: var(--accent2); }
+
+  .parent-doc-field {
+    background: rgba(108,99,255,0.06);
+    border: 1px solid rgba(108,99,255,0.2);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+
+  .parent-doc-field label { color: #a89fff; }
+
+  @media (max-width: 600px) {
+    .form-row { grid-template-columns: 1fr; }
+    .form-row.triple { grid-template-columns: 1fr 1fr; }
+    .tabs { gap: 6px; }
+    .tab { padding: 8px 14px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="badge badge-purple">Worxphere 전략추진실</div>
+  <h1>전자결재 자동화</h1>
+  <p>품의 유형을 선택하고 변수를 입력하면 실행 명령어가 자동 생성됩니다</p>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('interview')">
+    <span class="tab-icon">🎤</span>산학협력 인터뷰
+  </button>
+  <button class="tab" onclick="switchTab('freelance')">
+    <span class="tab-icon">👥</span>산학협력 프리랜서
+  </button>
+  <button class="tab" onclick="switchTab('ats')">
+    <span class="tab-icon">🎁</span>ATS 기프티콘
+  </button>
+  <button class="tab" onclick="switchTab('survey')">
+    <span class="tab-icon">📊</span>Placement Survey
+  </button>
+</div>
+
+<div class="panels">
+
+  <!-- 산학협력 인터뷰 -->
+  <div class="panel active" id="panel-interview">
+    <div class="card">
+      <div class="card-title"><span class="dot dot-purple"></span>산학협력 인터뷰 비용 지급</div>
+
+      <div class="subtype-row">
+        <button class="subtype-btn active" onclick="setSubtype('interview','b',this)">예산품의</button>
+      </div>
+
+      <div class="form-row">
+        <div class="field">
+          <label>신청월</label>
+          <input type="text" id="iv-mon" placeholder="예: 202603" value="202603">
+        </div>
+        <div class="field">
+          <label>FROM 신청월 (차감월)</label>
+          <input type="text" id="iv-from_mon" placeholder="예: 202612" value="202612">
+          <span class="hint">잔액 차감할 월 (기본: 신청월과 동일)</span>
+        </div>
+      </div>
+
+      <div class="form-row triple">
+        <div class="field">
+          <label>30분 단가</label>
+          <input type="number" id="iv-rate30" placeholder="30000" value="30000" step="5000">
+        </div>
+        <div class="field">
+          <label>30분 인원수</label>
+          <input type="number" id="iv-n30" placeholder="40" value="40">
+        </div>
+        <div class="field">
+          <label>소계</label>
+          <input type="text" id="iv-sub30" readonly style="color: var(--teal);">
+        </div>
+      </div>
+
+      <div class="form-row triple">
+        <div class="field">
+          <label>1시간 단가</label>
+          <input type="number" id="iv-rate60" placeholder="50000" value="50000" step="5000">
+        </div>
+        <div class="field">
+          <label>1시간 인원수</label>
+          <input type="number" id="iv-n60" placeholder="20" value="20">
+        </div>
+        <div class="field">
+          <label>소계</label>
+          <input type="text" id="iv-sub60" readonly style="color: var(--teal);">
+        </div>
+      </div>
+
+      <div class="form-row single">
+        <div class="field">
+          <label>총액 (자동계산)</label>
+          <input type="text" id="iv-total" readonly style="color: var(--green); font-weight: 700;">
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="generate-btn" onclick="generate('interview')">명령어 미리보기</button>
+        <button class="run-btn" id="run-interview" onclick="runDoc('interview')">🚀 문건등록</button>
+      </div>
+      <div class="run-status" id="status-interview"></div>
+    </div>
+    <div class="output-card" id="out-interview">
+      <div class="output-label">
+        실행 명령어
+        <button class="copy-btn" onclick="copyCmd('interview')">복사</button>
+      </div>
+      <div class="output-cmd" id="cmd-interview"></div>
+      <div class="output-preview" id="prev-interview"></div>
+    </div>
+    <div class="notice">⚠️ 예산품의 승인 완료 후 → Worxphere 전자결재 해당 문건 하단 <strong>"하위문건 등록"</strong> 클릭하여 구매품의 진행</div>
+  </div>
+
+  <!-- 산학협력 프리랜서 -->
+  <div class="panel" id="panel-freelance">
+    <div class="card">
+      <div class="card-title"><span class="dot dot-pink"></span>산학협력 프리랜서 고용</div>
+
+      <div class="subtype-row">
+        <button class="subtype-btn active" onclick="setSubtype('freelance','b',this)">예산품의</button>
+        <button class="subtype-btn" onclick="setSubtype('freelance','p',this)">구매품의</button>
+      </div>
+
+      <div id="freelance-b-fields">
+        <div class="form-row">
+          <div class="field">
+            <label>신청월</label>
+            <input type="text" id="fl-mon" placeholder="예: 202606" value="202606">
+          </div>
+          <div class="field">
+            <label>총 지불 금액 (원)</label>
+            <input type="number" id="fl-amt" placeholder="예: 5000000" value="5000000" step="100000">
+          </div>
+        </div>
+        <div class="form-row triple">
+          <div class="field">
+            <label>인원수 (명)</label>
+            <input type="number" id="fl-n" value="9">
+          </div>
+          <div class="field">
+            <label>진행 주차</label>
+            <input type="number" id="fl-weeks" value="6">
+          </div>
+          <div class="field">
+            <label>주당 시간</label>
+            <input type="number" id="fl-hpw" value="40">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>총 근무 시간 (자동계산)</label>
+            <input type="text" id="fl-total-hours" readonly style="color: var(--teal);">
+          </div>
+          <div class="field">
+            <label>시급 환산 (자동계산)</label>
+            <input type="text" id="fl-calc" readonly style="color: var(--teal);">
+            <span class="hint">총 지불 금액 ÷ 총 근무 시간</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="freelance-p-fields" style="display:none">
+        <div class="parent-doc-field">
+          <div class="field">
+            <label>🔗 상위 예산품의 문건번호</label>
+            <input type="text" id="fl-parent" placeholder="예: 20260001234 (예산품의 승인 후 문건번호 입력)">
+            <span class="hint">입력 시 해당 문건의 '하위문건 등록'으로 자동 연결됩니다</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>공급사 (학회 대표자명)</label>
+            <input type="text" id="fl-sup" placeholder="EGI" value="EGI">
+          </div>
+          <div class="field">
+            <label>금액 (원)</label>
+            <input type="number" id="fl-p-amt" value="5000000" step="100000">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>계약 시작일</label>
+            <input type="text" id="fl-st" placeholder="2026/4/1">
+          </div>
+          <div class="field">
+            <label>계약 종료일</label>
+            <input type="text" id="fl-en" placeholder="2026/5/16">
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:14px">
+          <label>📎 첨부파일 (계약서)</label>
+          <div class="file-drop" id="fl-drop">
+            <input type="file" id="fl-files" multiple accept=".pdf,.doc,.docx,.zip,.xls,.xlsx" onchange="handleFiles('fl')">
+            <div class="file-drop-text">클릭하거나 파일을 드래그하세요<br><strong>PDF, DOC, ZIP, XLS</strong> 지원</div>
+          </div>
+          <div class="file-list" id="fl-file-list"></div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="generate-btn" onclick="generate('freelance')">명령어 미리보기</button>
+        <button class="run-btn" id="run-freelance" onclick="runDoc('freelance')">🚀 문건등록</button>
+      </div>
+      <div class="run-status" id="status-freelance"></div>
+    </div>
+    <div class="output-card" id="out-freelance">
+      <div class="output-label">
+        실행 명령어
+        <button class="copy-btn" onclick="copyCmd('freelance')">복사</button>
+      </div>
+      <div class="output-cmd" id="cmd-freelance"></div>
+      <div class="output-preview" id="prev-freelance"></div>
+    </div>
+    <div class="notice" id="fl-notice">⚠️ 예산품의 승인 완료 후 → Worxphere 전자결재 해당 문건 하단 <strong>"하위문건 등록"</strong> 클릭하여 구매품의 진행</div>
+  </div>
+
+  <!-- ATS 기프티콘 -->
+  <div class="panel" id="panel-ats">
+    <div class="card">
+      <div class="card-title"><span class="dot dot-green"></span>ATS 인터뷰 기프티콘</div>
+
+      <div class="subtype-row">
+        <button class="subtype-btn active" onclick="setSubtype('ats','b',this)">예산품의</button>
+        <button class="subtype-btn" onclick="setSubtype('ats','p',this)">구매품의</button>
+      </div>
+
+      <div id="ats-parent-field" style="display:none" class="parent-doc-field">
+        <div class="field">
+          <label>🔗 상위 예산품의 문건번호</label>
+          <input type="text" id="ats-parent" placeholder="예: 20260001234 (예산품의 승인 후 문건번호 입력)">
+          <span class="hint">입력 시 해당 문건의 '하위문건 등록'으로 자동 연결됩니다</span>
+        </div>
+      </div>
+      <div class="form-row single">
+        <div class="field">
+          <label>신청월</label>
+          <input type="text" id="ats-mon" placeholder="예: 202603" value="202603">
+        </div>
+      </div>
+
+      <div class="form-row triple">
+        <div class="field">
+          <label>네이버페이 단가</label>
+          <input type="number" id="ats-nprice" value="30000" step="5000">
+        </div>
+        <div class="field">
+          <label>네이버페이 수량</label>
+          <input type="number" id="ats-nq" value="12">
+        </div>
+        <div class="field">
+          <label>소계</label>
+          <input type="text" id="ats-nsub" readonly style="color: var(--teal);">
+        </div>
+      </div>
+
+      <div class="form-row triple">
+        <div class="field">
+          <label>스타벅스 단가</label>
+          <input type="number" id="ats-sprice" value="10000" step="5000">
+        </div>
+        <div class="field">
+          <label>스타벅스 수량</label>
+          <input type="number" id="ats-sq" value="10">
+        </div>
+        <div class="field">
+          <label>소계</label>
+          <input type="text" id="ats-ssub" readonly style="color: var(--teal);">
+        </div>
+      </div>
+
+      <div class="form-row single">
+        <div class="field">
+          <label>총액 (2% 할인 적용, 자동계산)</label>
+          <input type="text" id="ats-total" readonly style="color: var(--green); font-weight: 700;">
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="generate-btn" onclick="generate('ats')">명령어 미리보기</button>
+        <button class="run-btn" id="run-ats" onclick="runDoc('ats')">🚀 문건등록</button>
+      </div>
+      <div class="run-status" id="status-ats"></div>
+    </div>
+    <div class="output-card" id="out-ats">
+      <div class="output-label">
+        실행 명령어
+        <button class="copy-btn" onclick="copyCmd('ats')">복사</button>
+      </div>
+      <div class="output-cmd" id="cmd-ats"></div>
+      <div class="output-preview" id="prev-ats"></div>
+    </div>
+    <div class="notice">⚠️ 예산품의 승인 완료 후 → Worxphere 전자결재 해당 문건 하단 <strong>"하위문건 등록"</strong> 클릭하여 구매품의 진행</div>
+  </div>
+
+  <!-- Placement Survey -->
+  <div class="panel" id="panel-survey">
+    <div class="card">
+      <div class="card-title"><span class="dot dot-amber"></span>Placement Survey</div>
+
+      <div class="subtype-row">
+        <button class="subtype-btn active" onclick="setSubtype('survey','b',this)">예산품의</button>
+        <button class="subtype-btn" onclick="setSubtype('survey','p',this)">구매품의</button>
+      </div>
+
+      <div id="survey-b-fields">
+        <div class="form-row">
+          <div class="field">
+            <label>연도</label>
+            <input type="text" id="sv-yr" value="2026">
+          </div>
+          <div class="field">
+            <label>신청 방식</label>
+            <select id="sv-mode" onchange="updateSurveyMode()">
+              <option value="all">4분기 전체 (기본)</option>
+              <option value="single">특정 월 1개</option>
+              <option value="multi">여러 월 선택</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="sv-single-row" style="display:none" class="form-row single">
+          <div class="field">
+            <label>신청월 (YYYYMM)</label>
+            <input type="text" id="sv-mon" placeholder="202612">
+          </div>
+        </div>
+
+        <div id="sv-multi-row" style="display:none" class="form-row single">
+          <div class="field">
+            <label>신청월 (쉼표 구분)</label>
+            <input type="text" id="sv-months" placeholder="202603,202606">
+          </div>
+        </div>
+
+        <div class="form-row single">
+          <div class="field">
+            <label>분기당 금액 (원)</label>
+            <input type="number" id="sv-amt" value="15000000" step="1000000">
+            <span class="hint">4분기 전체 선택 시 4분기 각각 동일 금액 적용</span>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:14px">
+          <label>📎 첨부파일 (견적서)</label>
+          <div class="file-drop" id="svb-drop">
+            <input type="file" id="svb-files" multiple accept=".pdf,.doc,.docx,.zip,.xls,.xlsx" onchange="handleFiles('svb')">
+            <div class="file-drop-text">클릭하거나 파일을 드래그하세요<br><strong>PDF, DOC, ZIP, XLS</strong> 지원</div>
+          </div>
+          <div class="file-list" id="svb-file-list"></div>
+        </div>
+      </div>
+
+      <div id="survey-p-fields" style="display:none">
+        <div class="parent-doc-field">
+          <div class="field">
+            <label>🔗 상위 예산품의 문건번호</label>
+            <input type="text" id="sv-parent" placeholder="예: 20260001234 (예산품의 승인 후 문건번호 입력)">
+            <span class="hint">입력 시 해당 문건의 '하위문건 등록'으로 자동 연결됩니다</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>연도</label>
+            <input type="text" id="sv-p-yr" value="2026">
+          </div>
+          <div class="field">
+            <label>분기당 금액 (원)</label>
+            <input type="number" id="sv-p-amt" value="14000000" step="1000000">
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:14px">
+          <label>📎 첨부파일 (견적서 + 계약서)</label>
+          <div class="file-drop" id="svp-drop">
+            <input type="file" id="svp-files" multiple accept=".pdf,.doc,.docx,.zip,.xls,.xlsx" onchange="handleFiles('svp')">
+            <div class="file-drop-text">클릭하거나 파일을 드래그하세요<br><strong>PDF, DOC, ZIP, XLS</strong> 지원</div>
+          </div>
+          <div class="file-list" id="svp-file-list"></div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="generate-btn" onclick="generate('survey')">명령어 미리보기</button>
+        <button class="run-btn" id="run-survey" onclick="runDoc('survey')">🚀 문건등록</button>
+      </div>
+      <div class="run-status" id="status-survey"></div>
+    </div>
+    <div class="output-card" id="out-survey">
+      <div class="output-label">
+        실행 명령어
+        <button class="copy-btn" onclick="copyCmd('survey')">복사</button>
+      </div>
+      <div class="output-cmd" id="cmd-survey"></div>
+      <div class="output-preview" id="prev-survey"></div>
+    </div>
+    <div class="notice">⚠️ 예산품의 승인 완료 후 → Worxphere 전자결재 해당 문건 하단 <strong>"하위문건 등록"</strong> 클릭하여 구매품의 진행</div>
+  </div>
+
+</div>
+
+<script>
+const state = { interview:'b', freelance:'b', ats:'b', survey:'b' };
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const names = ['interview','freelance','ats','survey'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+}
+
+function setSubtype(tab, type, btn) {
+  state[tab] = type;
+  btn.parentElement.querySelectorAll('.subtype-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  if (tab === 'freelance') {
+    document.getElementById('freelance-b-fields').style.display = type==='b' ? '' : 'none';
+    document.getElementById('freelance-p-fields').style.display = type==='p' ? '' : 'none';
+    document.getElementById('fl-notice').style.display = type==='b' ? '' : 'none';
+  }
+  if (tab === 'survey') {
+    document.getElementById('survey-b-fields').style.display = type==='b' ? '' : 'none';
+    document.getElementById('survey-p-fields').style.display = type==='p' ? '' : 'none';
+  }
+  if (tab === 'ats') {
+    document.getElementById('ats-parent-field').style.display = type==='p' ? '' : 'none';
+  }
+}
+
+function updateSurveyMode() {
+  const mode = document.getElementById('sv-mode').value;
+  document.getElementById('sv-single-row').style.display = mode==='single' ? '' : 'none';
+  document.getElementById('sv-multi-row').style.display = mode==='multi' ? '' : 'none';
+}
+
+function fmt(n) { return Number(n).toLocaleString('ko-KR') + '원'; }
+
+// 실시간 계산
+function calcInterview() {
+  const r30 = +document.getElementById('iv-rate30').value||0;
+  const n30 = +document.getElementById('iv-n30').value||0;
+  const r60 = +document.getElementById('iv-rate60').value||0;
+  const n60 = +document.getElementById('iv-n60').value||0;
+  const s30 = r30*n30, s60 = r60*n60;
+  document.getElementById('iv-sub30').value = fmt(s30);
+  document.getElementById('iv-sub60').value = fmt(s60);
+  document.getElementById('iv-total').value = fmt(s30+s60);
+}
+
+function calcFreelance() {
+  const n   = +document.getElementById('fl-n').value||0;
+  const w   = +document.getElementById('fl-weeks').value||0;
+  const h   = +document.getElementById('fl-hpw').value||0;
+  const amt = +document.getElementById('fl-amt').value||0;
+  const totalHours = n * w * h;
+  const hourly = totalHours > 0 ? Math.round(amt / totalHours) : 0;
+  document.getElementById('fl-total-hours').value = totalHours.toLocaleString() + '시간';
+  document.getElementById('fl-calc').value = hourly > 0 ? `약 ${hourly.toLocaleString()}원/시간` : '-';
+}
+
+function calcAts() {
+  const np = +document.getElementById('ats-nprice').value||0;
+  const nq = +document.getElementById('ats-nq').value||0;
+  const sp = +document.getElementById('ats-sprice').value||0;
+  const sq = +document.getElementById('ats-sq').value||0;
+  const na = Math.round(np*nq*0.98), sa = Math.round(sp*sq*0.98);
+  document.getElementById('ats-nsub').value = fmt(na);
+  document.getElementById('ats-ssub').value = fmt(sa);
+  document.getElementById('ats-total').value = fmt(na+sa) + ' (2% 할인)';
+}
+
+// 이벤트 연결
+['iv-rate30','iv-n30','iv-rate60','iv-n60'].forEach(id => document.getElementById(id).addEventListener('input', calcInterview));
+['fl-n','fl-weeks','fl-hpw','fl-amt'].forEach(id => document.getElementById(id).addEventListener('input', calcFreelance));
+['ats-nprice','ats-nq','ats-sprice','ats-sq'].forEach(id => document.getElementById(id).addEventListener('input', calcAts));
+
+// 초기 계산
+calcInterview(); calcFreelance(); calcAts();
+
+// 파일 저장소
+const fileStore = {};
+
+function handleFiles(key) {
+  const input = document.getElementById(key+'-files');
+  if (!input || !input.files.length) return;
+  if (!fileStore[key]) fileStore[key] = [];
+  Array.from(input.files).forEach(f => {
+    if (!fileStore[key].find(x => x.name === f.name)) {
+      fileStore[key].push(f);
+    }
+  });
+  renderFileList(key);
+}
+
+function renderFileList(key) {
+  const list = document.getElementById(key+'-file-list');
+  if (!list) return;
+  list.innerHTML = fileStore[key]?.map((f, i) => `
+    <div class="file-item">
+      <span class="file-item-name">📄 ${f.name}</span>
+      <button class="file-remove" onclick="removeFile('${key}',${i})">✕</button>
+    </div>
+  `).join('') || '';
+}
+
+function removeFile(key, idx) {
+  fileStore[key].splice(idx, 1);
+  renderFileList(key);
+}
+
+function getFilePaths(key) {
+  return (fileStore[key] || []).map(f => f.path || f.name);
+}
+
+function generate(tab) {
+  let cmd = '', preview = '';
+  const type = state[tab];
+
+  if (tab === 'interview') {
+    const mon     = document.getElementById('iv-mon').value;
+    const from_mon= document.getElementById('iv-from_mon').value;
+    const rate30  = document.getElementById('iv-rate30').value;
+    const n30     = document.getElementById('iv-n30').value;
+    const rate60  = document.getElementById('iv-rate60').value;
+    const n60     = document.getElementById('iv-n60').value;
+    const total   = (+rate30*(+n30) + +rate60*(+n60));
+
+    cmd = `node fill.js interview-b --mon ${mon} --from_mon ${from_mon} --n30 ${n30} --n60 ${n60} --rate30 ${rate30} --rate60 ${rate60} --dry-run`;
+    preview = `
+      <div class="preview-row"><span class="preview-key">문서유형</span><span class="preview-val">산학협력 인터뷰 비용 예산품의</span></div>
+      <div class="preview-row"><span class="preview-key">신청월</span><span class="preview-val">${mon}</span></div>
+      <div class="preview-row"><span class="preview-key">30분</span><span class="preview-val">${Number(rate30).toLocaleString()}원 × ${n30}명</span></div>
+      <div class="preview-row"><span class="preview-key">1시간</span><span class="preview-val">${Number(rate60).toLocaleString()}원 × ${n60}명</span></div>
+      <div class="preview-row"><span class="preview-key">총액</span><span class="preview-val" style="color:var(--green);font-weight:700">${total.toLocaleString()}원</span></div>
+    `;
+  }
+
+  else if (tab === 'freelance') {
+    if (type === 'b') {
+      const mon   = document.getElementById('fl-mon').value;
+      const n     = document.getElementById('fl-n').value;
+      const weeks = document.getElementById('fl-weeks').value;
+      const hpw   = document.getElementById('fl-hpw').value;
+      const amt   = document.getElementById('fl-amt').value;
+      const totalH= +n * +weeks * +hpw;
+      const calcAmt = amt || (totalH * 10000);
+
+      cmd = `node fill.js free-b --mon ${mon} --n ${n} --weeks ${weeks} --hpw ${hpw}`;
+      if (amt) cmd += ` --amt ${amt}`;
+      cmd += ` --dry-run`;
+
+      const hourly = totalH > 0 ? Math.round(calcAmt / totalH) : 0;
+      preview = `
+        <div class="preview-row"><span class="preview-key">문서유형</span><span class="preview-val">산학협력 프리랜서 예산품의</span></div>
+        <div class="preview-row"><span class="preview-key">신청월</span><span class="preview-val">${mon}</span></div>
+        <div class="preview-row"><span class="preview-key">인원/기간</span><span class="preview-val">${n}명 × ${weeks}주 × ${hpw}h = 총 ${totalH.toLocaleString()}시간</span></div>
+        <div class="preview-row"><span class="preview-key">총 지불 금액</span><span class="preview-val" style="color:var(--green);font-weight:700">${Number(calcAmt).toLocaleString()}원</span></div>
+        <div class="preview-row"><span class="preview-key">시급 환산</span><span class="preview-val">약 ${hourly.toLocaleString()}원/시간</span></div>
+      `;
+    } else {
+      const sup = document.getElementById('fl-sup').value;
+      const st  = document.getElementById('fl-st').value;
+      const en  = document.getElementById('fl-en').value;
+      const amt = document.getElementById('fl-p-amt').value;
+
+      cmd = `node fill.js free-p --sup "${sup}" --st "${st}" --en "${en}" --amt ${amt} --dry-run`;
+      preview = `
+        <div class="preview-row"><span class="preview-key">문서유형</span><span class="preview-val">산학협력 프리랜서 구매품의</span></div>
+        <div class="preview-row"><span class="preview-key">공급사</span><span class="preview-val">${sup}</span></div>
+        <div class="preview-row"><span class="preview-key">계약기간</span><span class="preview-val">${st} ~ ${en}</span></div>
+        <div class="preview-row"><span class="preview-key">금액</span><span class="preview-val" style="color:var(--green);font-weight:700">${Number(amt).toLocaleString()}원</span></div>
+      `;
+    }
+  }
+
+  else if (tab === 'ats') {
+    const mon    = document.getElementById('ats-mon').value;
+    const nprice = document.getElementById('ats-nprice').value;
+    const nq     = document.getElementById('ats-nq').value;
+    const sprice = document.getElementById('ats-sprice').value;
+    const sq     = document.getElementById('ats-sq').value;
+    const na     = Math.round(+nprice * +nq * 0.98);
+    const sa     = Math.round(+sprice * +sq * 0.98);
+
+    const atsParent = type==='p' ? document.getElementById('ats-parent')?.value : '';
+    cmd = `node fill.js ats-${type} --mon ${mon} --nq ${nq} --sq ${sq} --nprice ${nprice} --sprice ${sprice}`;
+    if (atsParent) cmd += ` --parent ${atsParent}`;
+    cmd += ` --dry-run`;
+    preview = `
+      <div class="preview-row"><span class="preview-key">문서유형</span><span class="preview-val">ATS 기프티콘 ${type==='b'?'예산':'구매'}품의</span></div>
+      <div class="preview-row"><span class="preview-key">신청월</span><span class="preview-val">${mon}</span></div>
+      <div class="preview-row"><span class="preview-key">네이버페이</span><span class="preview-val">${Number(nprice).toLocaleString()}원권 × ${nq}건 = ${na.toLocaleString()}원</span></div>
+      <div class="preview-row"><span class="preview-key">스타벅스</span><span class="preview-val">${Number(sprice).toLocaleString()}원권 × ${sq}건 = ${sa.toLocaleString()}원</span></div>
+      <div class="preview-row"><span class="preview-key">총액</span><span class="preview-val" style="color:var(--green);font-weight:700">${(na+sa).toLocaleString()}원 (2% 할인)</span></div>
+    `;
+  }
+
+  else if (tab === 'survey') {
+    if (type === 'b') {
+      const yr   = document.getElementById('sv-yr').value;
+      const mode = document.getElementById('sv-mode').value;
+      const amt  = document.getElementById('sv-amt').value;
+
+      const svbFiles = getFilePaths('svb');
+      cmd = `node fill.js survey-b --yr ${yr} --amt ${amt}`;
+      if (mode === 'single') {
+        const mon = document.getElementById('sv-mon').value;
+        cmd += ` --mon ${mon}`;
+      } else if (mode === 'multi') {
+        const months = document.getElementById('sv-months').value;
+        cmd += ` --months ${months}`;
+      }
+      if (svbFiles.length) cmd += ` --files "${svbFiles.join(',')}"`;
+      cmd += ' --dry-run';
+
+      const modeText = mode==='all' ? '4분기 전체' : mode==='single' ? document.getElementById('sv-mon').value : document.getElementById('sv-months').value;
+      preview = `
+        <div class="preview-row"><span class="preview-key">문서유형</span><span class="preview-val">Placement Survey 예산품의</span></div>
+        <div class="preview-row"><span class="preview-key">연도</span><span class="preview-val">${yr}년</span></div>
+        <div class="preview-row"><span class="preview-key">신청월</span><span class="preview-val">${modeText}</span></div>
+        <div class="preview-row"><span class="preview-key">분기당 금액</span><span class="preview-val" style="color:var(--green);font-weight:700">${Number(amt).toLocaleString()}원</span></div>
+      `;
+    } else {
+      const yr  = document.getElementById('sv-p-yr').value;
+      const amt = document.getElementById('sv-p-amt').value;
+      const svParent = document.getElementById('sv-parent').value;
+      const svpFiles = getFilePaths('svp');
+      cmd = `node fill.js survey-p --yr ${yr} --amt ${amt}`;
+      if (svParent) cmd += ` --parent ${svParent}`;
+      if (svpFiles.length) cmd += ` --files "${svpFiles.join(',')}"`;
+      cmd += ' --dry-run';
+      preview = `
+        <div class="preview-row"><span class="preview-key">문서유형</span><span class="preview-val">Placement Survey 구매품의</span></div>
+        ${svParent ? `<div class="preview-row"><span class="preview-key">상위문건</span><span class="preview-val" style="color:var(--accent)">${svParent}</span></div>` : ''}
+        <div class="preview-row"><span class="preview-key">연도</span><span class="preview-val">${yr}년</span></div>
+        <div class="preview-row"><span class="preview-key">분기당 금액</span><span class="preview-val" style="color:var(--green);font-weight:700">${Number(amt).toLocaleString()}원</span></div>
+        ${svpFiles.length ? `<div class="preview-row"><span class="preview-key">첨부파일</span><span class="preview-val">${svpFiles.length}개</span></div>` : ''}
+      `;
+    }
+  }
+
+  document.getElementById('cmd-'+tab).textContent = cmd;
+  document.getElementById('prev-'+tab).innerHTML = preview;
+  document.getElementById('out-'+tab).classList.add('show');
+}
+
+function getArgs(tab) {
+  const type = state[tab];
+  const args = {};
+
+  if (tab === 'interview') {
+    args.type = 'interview-b';
+    args.mon      = document.getElementById('iv-mon').value;
+    args.from_mon = document.getElementById('iv-from_mon').value;
+    args.n30      = document.getElementById('iv-n30').value;
+    args.n60      = document.getElementById('iv-n60').value;
+    args.rate30   = document.getElementById('iv-rate30').value;
+    args.rate60   = document.getElementById('iv-rate60').value;
+  }
+  else if (tab === 'freelance') {
+    if (type === 'b') {
+      args.type  = 'free-b';
+      args.mon   = document.getElementById('fl-mon').value;
+      args.n     = document.getElementById('fl-n').value;
+      args.weeks = document.getElementById('fl-weeks').value;
+      args.hpw   = document.getElementById('fl-hpw').value;
+      const amt  = document.getElementById('fl-amt').value;
+      if (amt) args.amt = amt;
+    } else {
+      args.type   = 'free-p';
+      args.parent = document.getElementById('fl-parent').value;
+      args.sup    = document.getElementById('fl-sup').value;
+      args.st     = document.getElementById('fl-st').value;
+      args.en     = document.getElementById('fl-en').value;
+      args.amt    = document.getElementById('fl-p-amt').value;
+      const files = getFilePaths('fl');
+      if (files.length) args.files = files.join(',');
+    }
+  }
+  else if (tab === 'ats') {
+    args.type   = `ats-${type}`;
+    args.mon    = document.getElementById('ats-mon').value;
+    args.nq     = document.getElementById('ats-nq').value;
+    args.sq     = document.getElementById('ats-sq').value;
+    args.nprice = document.getElementById('ats-nprice').value;
+    args.sprice = document.getElementById('ats-sprice').value;
+    if (type === 'p') args.parent = document.getElementById('ats-parent')?.value;
+  }
+  else if (tab === 'survey') {
+    if (type === 'b') {
+      args.type = 'survey-b';
+      args.yr   = document.getElementById('sv-yr').value;
+      args.amt  = document.getElementById('sv-amt').value;
+      const mode = document.getElementById('sv-mode').value;
+      if (mode === 'single') args.mon = document.getElementById('sv-mon').value;
+      else if (mode === 'multi') args.months = document.getElementById('sv-months').value;
+      const files = getFilePaths('svb');
+      if (files.length) args.files = files.join(',');
+    } else {
+      args.type   = 'survey-p';
+      args.yr     = document.getElementById('sv-p-yr').value;
+      args.amt    = document.getElementById('sv-p-amt').value;
+      args.parent = document.getElementById('sv-parent').value;
+      const files = getFilePaths('svp');
+      if (files.length) args.files = files.join(',');
+    }
+  }
+
+  return args;
+}
+
+async function runDoc(tab) {
+  const args = getArgs(tab);
+  const btn = document.getElementById('run-'+tab);
+  const status = document.getElementById('status-'+tab);
+
+  btn.disabled = true;
+  btn.textContent = '⏳ 실행 중...';
+  status.className = 'run-status running';
+  status.textContent = '브라우저를 열고 있어요. 로그인 후 자동으로 진행됩니다...';
+
+  try {
+    const res = await fetch('/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: args.type, args }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      status.className = 'run-status success';
+      status.textContent = '✅ 완료! 브라우저에서 내용을 확인하고 최종 제출하세요.';
+      btn.textContent = '✅ 완료';
+    } else {
+      status.className = 'run-status error';
+      status.textContent = `❌ 오류: ${data.output?.split('\n').find(l => l.includes('[✗]')) || '실행 실패'}`;
+      btn.textContent = '🚀 문건등록';
+    }
+  } catch(e) {
+    status.className = 'run-status error';
+    status.textContent = '❌ 서버 연결 실패. npm start로 서버를 먼저 실행해주세요.';
+    btn.textContent = '🚀 문건등록';
+  }
+
+  btn.disabled = false;
+}
+
+function copyCmd(tab) {
+  const cmd = document.getElementById('cmd-'+tab).textContent;
+  navigator.clipboard.writeText(cmd).then(() => {
+    const btn = document.querySelector(`#out-${tab} .copy-btn`);
+    btn.textContent = '✓ 복사됨';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+</script>
+</body>
+</html>

@@ -1,4 +1,24 @@
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const CACHE_FILE = path.join(__dirname, '.doc_cache.json');
+
+function saveDocNo(type, docNo) {
+  let cache = {};
+  try { cache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch(e) {}
+  cache[type] = { docNo, savedAt: new Date().toISOString() };
+  fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2));
+  console.log(`\n[💾] 문건번호 저장: ${type} → ${docNo}`);
+}
+
+function loadDocNo(type) {
+  try {
+    const cache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+    const entry = cache[type];
+    if (entry) return entry.docNo;
+  } catch(e) {}
+  return null;
+}
 const { chromium } = require('playwright');
 const argv = require('minimist')(process.argv.slice(2));
 const TEMPLATES = require('./config/templates');
@@ -82,7 +102,32 @@ async function main() {
       await page.waitForTimeout(2000);
     }
 
-    await page.click('a:has-text("문건등록"), button:has-text("문건등록")');
+    // 구매품의인 경우 상위문건 자동 로드
+    let parentDocNo = argv['parent'];
+    if (!parentDocNo && docType && docType.endsWith('-p')) {
+      const budgetType = docType.replace('-p', '-b');
+      parentDocNo = loadDocNo(budgetType);
+      if (parentDocNo) {
+        log(`저장된 예산품의 문건번호 자동 로드: ${parentDocNo}`);
+      }
+    }
+
+    if (parentDocNo) {
+      log(`상위문건 ${parentDocNo} 에서 하위문건 등록 진행 중...`);
+      await page.goto(`https://eda.jobkorea.co.kr/Eda/DocView?docNo=${parentDocNo}`, { waitUntil: 'networkidle', timeout: 30000 });
+      await page.waitForTimeout(2000);
+      const subBtn = page.locator('button:has-text("하위문건 등록"), a:has-text("하위문건 등록")').first();
+      if (await subBtn.count() > 0) {
+        await subBtn.click();
+      } else {
+        await page.evaluate(() => {
+          const btn = Array.from(document.querySelectorAll('button, a')).find(b => b.textContent.includes('하위문건 등록'));
+          if (btn) btn.click();
+        });
+      }
+    } else {
+      await page.click('a:has-text("문건등록"), button:has-text("문건등록")');
+    }
     await page.waitForTimeout(2000);
     await page.waitForSelector('input[placeholder="문건제목을 입력해주세요"]', { timeout: 30000 });
 
@@ -102,12 +147,19 @@ async function main() {
       await fillBody(page, data.본문);
     }
 
+    // 첨부파일 처리
+    const files = argv['files'] ? String(argv['files']).split(',').map(f => f.trim()) : [];
+    if (files.length > 0) {
+      log('첨부파일 업로드 중...');
+      await attachFiles(page, files);
+    }
+
     if (isDryRun) {
       warn('--dry-run 모드: 입력 완료. 직접 확인 후 브라우저를 닫으세요.');
       await page.waitForEvent('close', { timeout: 300000 });
     } else {
       log('결재 상신(제출) 중...');
-      await submitDoc(page);
+      await submitDoc(page, docType);
       log('🎉 제출 완료!');
     }
 
@@ -346,7 +398,35 @@ async function fillBody(page, bodyText) {
   }
 }
 
-async function submitDoc(page) {
+async function attachFiles(page, files) {
+  if (!files || files.length === 0) return;
+
+  for (const filePath of files) {
+    log(`첨부파일 업로드 중: ${filePath}`);
+    const fileInput = page.locator('input[type="file"]').first();
+    if (await fileInput.count() > 0) {
+      await fileInput.setInputFiles(filePath);
+      await page.waitForTimeout(1500);
+      log(`첨부파일 완료: ${filePath}`);
+    } else {
+      // 파일 등록 버튼 클릭
+      const fileBtn = page.locator('button:has-text("파일등록"), button:has-text("파일 등록"), a:has-text("파일등록")').first();
+      if (await fileBtn.count() > 0) {
+        await fileBtn.click();
+        await page.waitForTimeout(500);
+        const input = page.locator('input[type="file"]').first();
+        if (await input.count() > 0) {
+          await input.setInputFiles(filePath);
+          await page.waitForTimeout(1500);
+        }
+      } else {
+        warn(`파일 입력 필드를 찾지 못했습니다. 수동으로 첨부해주세요: ${filePath}`);
+      }
+    }
+  }
+}
+
+async function submitDoc(page, docType) {
   page.on('dialog', async (dialog) => {
     log(`팝업: "${dialog.message()}" → 확인`);
     await dialog.accept();
@@ -358,7 +438,25 @@ async function submitDoc(page) {
     return;
   }
   await submitBtn.click();
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(3000);
+
+  // 제출 후 문건번호 저장 (예산품의인 경우)
+  if (docType && docType.endsWith('-b')) {
+    try {
+      const url = page.url();
+      const match = url.match(/docNo=([0-9]+)/);
+      if (match) {
+        saveDocNo(docType, match[1]);
+      } else {
+        // URL에서 못 찾으면 페이지에서 찾기
+        const docNo = await page.evaluate(() => {
+          const el = document.querySelector('[class*="docNo"], [id*="docNo"]');
+          return el ? el.textContent.trim() : null;
+        });
+        if (docNo) saveDocNo(docType, docNo);
+      }
+    } catch(e) {}
+  }
 }
 
 main();
