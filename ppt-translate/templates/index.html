@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PPT 장표 번역기</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:        #1B3A6B;
+      --navy-light:  #2A5298;
+      --blue-light:  #EFF6FF;
+      --bg:          #F1F5F9;
+      --card:        #FFFFFF;
+      --text:        #1E293B;
+      --muted:       #64748B;
+      --border:      #E2E8F0;
+      --success:     #059669;
+      --success-bg:  #ECFDF5;
+      --warning:     #D97706;
+      --warning-bg:  #FFFBEB;
+      --danger:      #DC2626;
+      --danger-bg:   #FEF2F2;
+      --radius:      12px;
+      --shadow:      0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.04);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--navy);
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    header .icon {
+      width: 36px; height: 36px;
+      background: rgba(255,255,255,.15);
+      border-radius: 8px;
+      display: grid; place-items: center;
+      font-size: 18px;
+    }
+    header h1 { color: #fff; font-size: 18px; font-weight: 700; letter-spacing: -.3px; }
+    header p  { color: rgba(255,255,255,.55); font-size: 12px; margin-top: 2px; }
+
+    /* ── Layout ── */
+    main {
+      max-width: 680px;
+      margin: 32px auto;
+      padding: 0 16px 64px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Drop Zone ── */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 36px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+    }
+    #drop-zone:hover, #drop-zone.active {
+      border-color: var(--navy);
+      background: var(--blue-light);
+    }
+    #drop-zone .dz-icon { font-size: 32px; margin-bottom: 10px; }
+    #drop-zone p   { color: var(--muted); font-size: 14px; line-height: 1.6; }
+    #drop-zone span { color: var(--navy); font-weight: 600; }
+    #file-input { display: none; }
+
+    /* ── File Badge ── */
+    #file-badge {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: var(--blue-light);
+      border-radius: 8px;
+      border: 1px solid #BFDBFE;
+    }
+    #file-badge .fname { font-size: 13px; font-weight: 600; color: var(--navy); flex: 1; }
+    #file-badge .fsize { font-size: 12px; color: var(--muted); }
+    #file-badge .rm-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: 16px; line-height: 1;
+      padding: 2px 6px; border-radius: 4px;
+      transition: color .15s, background .15s;
+    }
+    #file-badge .rm-btn:hover { color: var(--danger); background: var(--danger-bg); }
+
+    /* ── Settings ── */
+    .setting-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .setting-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .setting-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      width: 110px;
+      flex-shrink: 0;
+    }
+    .setting-sub {
+      font-size: 11px;
+      color: var(--muted);
+      display: block;
+      margin-top: 1px;
+    }
+
+    /* ── Direction Toggle ── */
+    .dir-group {
+      display: flex;
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .dir-btn {
+      padding: 7px 18px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--muted);
+      background: none;
+      transition: all .15s;
+    }
+    .dir-btn.active {
+      background: var(--navy);
+      color: #fff;
+      box-shadow: 0 1px 4px rgba(27,58,107,.3);
+    }
+
+    /* ── Translate Button ── */
+    #translate-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--navy);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, transform .1s, opacity .15s;
+      letter-spacing: -.2px;
+    }
+    #translate-btn:hover:not(:disabled) { background: var(--navy-light); }
+    #translate-btn:active:not(:disabled) { transform: scale(.99); }
+    #translate-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* ── Progress ── */
+    #progress-card { display: none; }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 14px;
+    }
+    .progress-header h2 { font-size: 15px; font-weight: 600; }
+    .progress-label { font-size: 13px; color: var(--muted); }
+    .progress-bar {
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--navy), var(--navy-light));
+      border-radius: 4px;
+      width: 0%;
+      transition: width .5s ease;
+    }
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--navy);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Overflow ── */
+    #overflow-card { display: none; }
+    .overflow-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .overflow-badge {
+      background: var(--warning-bg);
+      color: var(--warning);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+    /* 슬라이드 번호 pill 태그들 */
+    .slide-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .slide-pill {
+      background: var(--warning-bg);
+      color: var(--warning);
+      border: 1px solid #FDE68A;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    /* ── Integration Steps ── */
+    #integration-card { display: none; }
+    .step-list { display: flex; flex-direction: column; gap: 10px; }
+    .step-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+      transition: background .2s, border-color .2s;
+    }
+    .step-item.running  { background: var(--blue-light);  border-color: #BFDBFE; }
+    .step-item.done     { background: var(--success-bg);  border-color: #A7F3D0; }
+    .step-item.error    { background: var(--danger-bg);   border-color: #FECACA; }
+    .step-item.pending  { background: var(--bg);          color: var(--muted); }
+    .step-icon  { font-size: 16px; flex-shrink: 0; }
+    .step-label { font-weight: 600; flex-shrink: 0; }
+    .step-msg   { color: var(--muted); flex: 1; }
+    .step-item.running .step-msg { color: #2563EB; }
+    .step-item.done    .step-msg { color: var(--success); }
+    .step-item.error   .step-msg { color: var(--danger); }
+
+    /* ── Result ── */
+    #result-card { display: none; }
+    .result-icon  { font-size: 36px; text-align: center; margin-bottom: 12px; }
+    .result-title { font-size: 17px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+    .result-sub   { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 20px; }
+    .download-row { display: flex; gap: 10px; }
+    .dl-btn {
+      flex: 1; padding: 12px; border: none; border-radius: 8px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .dl-btn:active { transform: scale(.98); }
+    .dl-btn.primary   { background: var(--navy); color: #fff; }
+    .dl-btn.primary:hover { background: var(--navy-light); }
+    .dl-btn.secondary { background: var(--bg); color: var(--navy); border: 1.5px solid var(--border); }
+    .dl-btn.secondary:hover { background: var(--blue-light); }
+
+    /* ── Error ── */
+    #error-bar {
+      display: none;
+      padding: 12px 16px;
+      background: var(--danger-bg);
+      border: 1px solid #FECACA;
+      border-radius: var(--radius);
+      font-size: 13px;
+      color: var(--danger);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="icon">📊</div>
+  <div>
+    <h1>PPT 장표 번역기</h1>
+    <p>Claude claude-sonnet-4-6 · Australian English</p>
+  </div>
+</header>
+
+<main>
+
+  <!-- Error -->
+  <div id="error-bar"></div>
+
+  <!-- Upload -->
+  <div class="card">
+    <p class="card-title">파일 업로드</p>
+    <div id="drop-zone">
+      <div class="dz-icon">📎</div>
+      <p>PPT 파일을 여기에 드롭하거나<br><span>클릭해서 파일 선택</span></p>
+      <input type="file" id="file-input" accept=".pptx">
+    </div>
+    <div id="file-badge">
+      <span class="fname" id="fname"></span>
+      <span class="fsize" id="fsize"></span>
+      <button class="rm-btn" id="rm-btn" title="파일 제거">✕</button>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="card">
+    <p class="card-title">번역 설정</p>
+
+    <div class="setting-row">
+      <div class="setting-label">번역 방향</div>
+      <div class="dir-group">
+        <button class="dir-btn active" data-dir="ko_to_en">한 → 영</button>
+        <button class="dir-btn"        data-dir="en_to_ko">영 → 한</button>
+      </div>
+    </div>
+
+    <div class="setting-row">
+      <div class="setting-label">
+        영어 스타일
+        <span class="setting-sub">고정</span>
+      </div>
+      <span style="font-size:13px; color:var(--muted);">Australian English</span>
+    </div>
+  </div>
+
+  <!-- Translate Button -->
+  <button id="translate-btn" disabled>번역 시작</button>
+
+  <!-- Progress -->
+  <div class="card" id="progress-card">
+    <div class="progress-header">
+      <h2><span class="spinner"></span>번역 중</h2>
+      <span class="progress-label" id="slide-label">슬라이드 0 / 0</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <div class="progress-meta">
+      <span id="elapsed-label">0초 경과</span>
+      <span id="eta-label"></span>
+    </div>
+  </div>
+
+  <!-- Overflow -->
+  <div class="card" id="overflow-card">
+    <div class="overflow-header">
+      <p class="card-title" style="margin-bottom:0;">글자수 초과</p>
+      <span class="overflow-badge" id="overflow-count">0개</span>
+      <span style="font-size:12px; color:var(--muted); margin-left:4px;">— PPT에 빨간색으로 표시됨</span>
+    </div>
+    <div class="slide-pills" id="slide-pills"></div>
+  </div>
+
+  <!-- Integration Steps -->
+  <div class="card" id="integration-card">
+    <p class="card-title">자동 연동</p>
+    <div class="step-list">
+      <div class="step-item pending" id="step-sharepoint">
+        <span class="step-icon">📁</span>
+        <span class="step-label">SharePoint</span>
+        <span class="step-msg" id="sp-msg">대기 중</span>
+      </div>
+      <div class="step-item pending" id="step-slack">
+        <span class="step-icon">💬</span>
+        <span class="step-label">Slack</span>
+        <span class="step-msg" id="sl-msg">대기 중</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div class="card" id="result-card">
+    <div class="result-icon">✅</div>
+    <p class="result-title">번역 완료!</p>
+    <p class="result-sub" id="result-sub"></p>
+    <div class="download-row">
+      <button class="dl-btn primary"   id="dl-pptx">PPT 다운로드</button>
+      <button class="dl-btn secondary" id="dl-report">리포트 다운로드</button>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  let selectedFile = null;
+  let selectedDir  = "ko_to_en";
+  let overflowCount = 0;
+  // 중복 슬라이드 pill 방지
+  const overflowSlides = new Set();
+
+  const dropZone       = document.getElementById("drop-zone");
+  const fileInput      = document.getElementById("file-input");
+  const fileBadge      = document.getElementById("file-badge");
+  const fnameEl        = document.getElementById("fname");
+  const fsizeEl        = document.getElementById("fsize");
+  const rmBtn          = document.getElementById("rm-btn");
+  const translateBtn   = document.getElementById("translate-btn");
+  const progressCard   = document.getElementById("progress-card");
+  const progressFill   = document.getElementById("progress-fill");
+  const slideLabel     = document.getElementById("slide-label");
+  const elapsedLabel   = document.getElementById("elapsed-label");
+  const etaLabel       = document.getElementById("eta-label");
+  const overflowCard   = document.getElementById("overflow-card");
+  const slidePills     = document.getElementById("slide-pills");
+  const overflowCnt    = document.getElementById("overflow-count");
+  const integrationCard= document.getElementById("integration-card");
+  const stepSP         = document.getElementById("step-sharepoint");
+  const stepSL         = document.getElementById("step-slack");
+  const spMsg          = document.getElementById("sp-msg");
+  const slMsg          = document.getElementById("sl-msg");
+  const resultCard     = document.getElementById("result-card");
+  const resultSub      = document.getElementById("result-sub");
+  const dlPptx         = document.getElementById("dl-pptx");
+  const dlReport       = document.getElementById("dl-report");
+  const errorBar       = document.getElementById("error-bar");
+
+  // ── File ───────────────────────────────────────────────────────────────────
+  function formatSize(b) {
+    return b > 1048576 ? (b/1048576).toFixed(1)+" MB" : (b/1024).toFixed(0)+" KB";
+  }
+  function setFile(file) {
+    if (!file.name.endsWith(".pptx")) { showError(".pptx 파일만 업로드 가능합니다."); return; }
+    selectedFile = file;
+    fnameEl.textContent = file.name;
+    fsizeEl.textContent = formatSize(file.size);
+    fileBadge.style.display = "flex";
+    dropZone.style.display  = "none";
+    translateBtn.disabled   = false;
+    hideError();
+  }
+  function clearFile() {
+    selectedFile = null; fileInput.value = "";
+    fileBadge.style.display = "none"; dropZone.style.display = "block";
+    translateBtn.disabled = true;
+  }
+  dropZone.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+  rmBtn.addEventListener("click", clearFile);
+  dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("active"); });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("active"));
+  dropZone.addEventListener("drop", e => {
+    e.preventDefault(); dropZone.classList.remove("active");
+    if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+  });
+
+  // ── Direction ──────────────────────────────────────────────────────────────
+  document.querySelectorAll(".dir-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".dir-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      selectedDir = btn.dataset.dir;
+    });
+  });
+
+  // ── Error ──────────────────────────────────────────────────────────────────
+  function showError(msg) { errorBar.innerText = "오류: " + msg; errorBar.style.display = "block"; errorBar.style.whiteSpace = "pre-wrap"; }
+  function hideError()    { errorBar.style.display = "none"; }
+
+  // ── Translate ──────────────────────────────────────────────────────────────
+  translateBtn.addEventListener("click", async () => {
+    if (!selectedFile) return;
+
+    // Reset
+    hideError();
+    overflowCount = 0; overflowSlides.clear();
+    slidePills.innerHTML = "";
+    overflowCard.style.display    = "none";
+    integrationCard.style.display = "none";
+    resultCard.style.display      = "none";
+    [stepSP, stepSL].forEach(el => { el.className = "step-item pending"; });
+    spMsg.textContent = "대기 중"; slMsg.textContent = "대기 중";
+    progressFill.style.width  = "0%";
+    slideLabel.textContent    = "슬라이드 0 / 0";
+    elapsedLabel.textContent  = "0초 경과";
+    etaLabel.textContent      = "";
+    progressCard.style.display = "block";
+    translateBtn.disabled      = true;
+
+    const formData = new FormData();
+    formData.append("file",      selectedFile);
+    formData.append("direction", selectedDir);
+    // 후처리 규칙은 항상 전체 활성화
+    formData.append("rules", JSON.stringify({
+      fix_billion: true, fix_duplicates: true, fix_month_abbrev: true,
+      fix_currency_order: true, fix_australian_spelling: true
+    }));
+
+    let jobId;
+    try {
+      const res  = await fetch("/translate", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.error) { showError(data.error); return; }
+      jobId = data.job_id;
+    } catch (err) {
+      showError("서버 연결 실패: " + err.message);
+      progressCard.style.display = "none"; translateBtn.disabled = false; return;
+    }
+
+    const es = new EventSource(`/stream/${jobId}`);
+
+    es.onmessage = (e) => {
+      const ev = JSON.parse(e.data);
+      if (ev.type === "heartbeat") return;
+
+      if (ev.type === "progress") {
+        progressFill.style.width = ev.percent + "%";
+        slideLabel.textContent   = `슬라이드 ${ev.slide} / ${ev.total}`;
+        elapsedLabel.textContent = ev.elapsed + "초 경과";
+        etaLabel.textContent     = ev.eta > 0 ? `완료까지 약 ${ev.eta}초` : "";
+      }
+
+      if (ev.type === "overflow") {
+        overflowCount++;
+        overflowCnt.textContent       = overflowCount + "개";
+        overflowCard.style.display    = "block";
+        // 같은 슬라이드 번호는 pill 하나만
+        if (!overflowSlides.has(ev.slide)) {
+          overflowSlides.add(ev.slide);
+          const pill = document.createElement("span");
+          pill.className   = "slide-pill";
+          pill.textContent = `슬라이드 ${ev.slide}`;
+          slidePills.appendChild(pill);
+        }
+      }
+
+      if (ev.type === "integration") {
+        integrationCard.style.display = "block";
+        const el  = ev.step === "sharepoint" ? stepSP : stepSL;
+        const msg = ev.step === "sharepoint" ? spMsg  : slMsg;
+        el.className    = `step-item ${ev.status}`;
+        msg.textContent = ev.message || (ev.status === "running" ? "처리 중..." : "");
+      }
+
+      if (ev.type === "done") {
+        es.close();
+        progressFill.style.width   = "100%";
+        progressCard.style.display = "none";
+        const dirLabel = selectedDir === "ko_to_en" ? "한 → 영" : "영 → 한";
+        resultSub.textContent     = `${selectedFile.name} · ${dirLabel} · 초과 ${overflowCount}개`;
+        resultCard.style.display  = "block";
+        dlPptx.onclick            = () => window.location.href = `/download/pptx/${jobId}`;
+        dlReport.style.display    = ev.has_report ? "" : "none";
+        dlReport.onclick          = () => window.location.href = `/download/report/${jobId}`;
+        translateBtn.disabled     = false;
+      }
+
+      if (ev.type === "error") {
+        es.close();
+        progressCard.style.display = "none";
+        showError((ev.message || "") + (ev.detail ? "\n\n📍 위치:\n" + ev.detail : ""));
+        translateBtn.disabled = false;
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      if (resultCard.style.display === "none") {
+        showError("스트림 연결이 끊어졌습니다. 페이지를 새로고침해주세요.");
+        progressCard.style.display = "none"; translateBtn.disabled = false;
+      }
+    };
+  });
+</script>
+
+</body>
+</html>

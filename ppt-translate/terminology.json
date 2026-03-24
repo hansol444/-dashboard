@@ -1,0 +1,37 @@
+{
+  "ko_to_en": {
+    "채용": "recruitment",
+    "인재 확보": "talent acquisition",
+    "면접": "interview",
+    "서류 전형": "document screening",
+    "합격률": "acceptance rate",
+    "지원자": "applicant",
+    "채용 공고": "job posting",
+    "직무기술서": "job description",
+    "온보딩": "onboarding",
+    "인사팀": "HR team",
+    "채용파트": "Recruitment Division",
+    "고용주 브랜딩": "employer branding",
+    "사내 추천": "employee referral",
+    "면접관": "interviewer",
+    "인력 계획": "workforce planning"
+  },
+  "en_to_ko": {
+    "recruitment": "채용",
+    "talent acquisition": "인재 확보",
+    "interview": "면접",
+    "job posting": "채용 공고",
+    "job description": "직무기술서",
+    "onboarding": "온보딩",
+    "employer branding": "고용주 브랜딩",
+    "employee referral": "사내 추천",
+    "workforce planning": "인력 계획"
+  },
+  "preserve": [
+    "APAC", "ANZ", "KPI", "OKR", "HRBP", "ATS",
+    "CHRO", "CEO", "HR", "ROI",
+    "LinkedIn", "Seek", "Indeed",
+    "JK", "AM", "SRI", "WTD", "RMB", "AMEnt.", "JP",
+    "KRW", "USD", "AUD"
+  ]
+}

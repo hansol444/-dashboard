@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# 환경변수 / 시크릿
+.env
+.env.local
+
+# Claude Code 로컬 설정
+.claude/
+
+# 입력/출력 파일 (실제 데이터)
+input/*.pptx
+output/
+temp_jobs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
