@@ -1,19 +1,5 @@
 [
   {
-    "id": "manual-1774851040245",
-    "from": "과거의 누군가",
-    "to": "임한솔",
-    "message": "나인하이어 스톡옵션_이정욱 지급",
-    "category": "나인하이어 지급",
-    "startDate": "2026-08-11",
-    "deadline": "2026-08-16",
-    "status": "in_progress",
-    "autoLevel": "manual",
-    "guide": "에스크로 수수료 → 주식매매대금 → 스톡옵션 순서 진행",
-    "channel": "수동 입력",
-    "timestamp": "2026. 3. 30. 오후 3:10:40"
-  },
-  {
     "id": "manual-1774851216149",
     "from": "이창준",
     "to": "주호연",
