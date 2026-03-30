@@ -35,7 +35,7 @@
     "category": "장표 제작/번역",
     "startDate": "",
     "deadline": "미정",
-    "status": "in_progress",
+    "status": "pending",
     "autoLevel": "auto",
     "guide": "장표: Claude/Genspark | 번역: python ppt-translate/translate.py",
     "channel": "수동 입력",
