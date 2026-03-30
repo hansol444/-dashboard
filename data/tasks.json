@@ -28,28 +28,6 @@
     "timestamp": "2026. 3. 30. 오후 3:28:02"
   },
   {
-    "id": "manual-1774857797751",
-    "from": "미지정",
-    "to": "주호연",
-    "message": "플레이스먼트",
-    "category": "Placement Survey 분석",
-    "startDate": "",
-    "deadline": "미정",
-    "status": "in_progress",
-    "autoLevel": "auto",
-    "guide": "run_jk.py → calc_rms.py → gen_ppt.py",
-    "channel": "수동 입력",
-    "timestamp": "2026. 3. 30. 오후 5:03:17",
-    "steps": [
-      "Raw 데이터 로드",
-      "분류표 매칭 (run_jk.py)",
-      "미분류 확인",
-      "RMS 계산 (calc_rms.py)",
-      "PPT 생성 (gen_ppt.py)"
-    ],
-    "topicFile": "regular/placement-analysis.md"
-  },
-  {
     "id": "manual-1774858037509",
     "from": "미지정",
     "to": "주호연",
