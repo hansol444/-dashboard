@@ -41,6 +41,9 @@ interface PendingTask extends Omit<SlackTask, "deadline"> {}
 /** 마감기한 확정된 태스크 */
 const confirmedTasks: SlackTask[] = [];
 
+/** 삭제된 태스크 ID 목록 (프론트 폴링 시 전달 후 비움) */
+const deletedTaskIds: string[] = [];
+
 /**
  * 마감기한 미확인 태스크 (스레드 답장 대기 중)
  * key: 원본 메시지의 ts (스레드 루트)
@@ -210,9 +213,23 @@ export async function POST(request: NextRequest) {
 
   const event = body.event;
 
-  // 봇 메시지 / 서브타입 있는 메시지 무시
-  if (event.bot_id || event.subtype) return NextResponse.json({ ok: true });
   if (event.type !== "message") return NextResponse.json({ ok: true });
+
+  // 메시지 삭제 이벤트 처리
+  if (event.subtype === "message_deleted") {
+    const deletedId = `slack-${event.deleted_ts}`;
+    // confirmedTasks에서 제거
+    const idx = confirmedTasks.findIndex((t) => t.id === deletedId);
+    if (idx !== -1) confirmedTasks.splice(idx, 1);
+    // awaitingDeadline에서도 제거
+    awaitingDeadline.delete(event.deleted_ts);
+    // 프론트에 삭제 신호 전달
+    deletedTaskIds.push(deletedId);
+    return NextResponse.json({ ok: true });
+  }
+
+  // 봇 메시지 / 기타 서브타입 무시
+  if (event.bot_id || event.subtype) return NextResponse.json({ ok: true });
 
   const text: string = event.text || "";
   const channel: string = event.channel;
@@ -291,9 +308,11 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-/** GET: 대시보드 폴링 — confirmedTasks 반환 후 비움 */
+/** GET: 대시보드 폴링 — 신규 태스크 + 삭제 ID 반환 후 비움 */
 export async function GET() {
   const tasks = [...confirmedTasks];
+  const deletedIds = [...deletedTaskIds];
   confirmedTasks.length = 0;
-  return NextResponse.json({ tasks });
+  deletedTaskIds.length = 0;
+  return NextResponse.json({ tasks, deletedIds });
 }

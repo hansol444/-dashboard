@@ -496,11 +496,15 @@ export default function Dashboard() {
             timestamp: t.timestamp,
           };
         });
-        // 중복 방지: 이미 있는 ID는 추가하지 않음
+        // 신규 태스크 추가 (중복 방지) + 삭제된 태스크 제거
         setTasks((prev) => {
+          const deletedIds: string[] = data.deletedIds || [];
           const existingIds = new Set(prev.map((t) => t.id));
           const fresh = newTasks.filter((t) => !existingIds.has(t.id));
-          return fresh.length > 0 ? [...fresh, ...prev] : prev;
+          const afterDelete = deletedIds.length > 0
+            ? prev.filter((t) => !deletedIds.includes(t.id))
+            : prev;
+          return fresh.length > 0 ? [...fresh, ...afterDelete] : afterDelete;
         });
       }
     } catch {
