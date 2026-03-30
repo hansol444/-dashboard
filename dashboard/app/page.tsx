@@ -40,6 +40,8 @@ interface Task {
   executionSteps?: ExecutionStep[];
   outputFile?: string;
   notes?: string[]; // 스레드 댓글 키워드
+  steps?: string[];  // classify 결과 단계
+  topicFile?: string;
 }
 
 interface MeetingSummary {
@@ -475,8 +477,15 @@ export default function Dashboard() {
       const res = await fetch("/api/tasks");
       const data = await res.json();
       if (!data.tasks) return;
-      const apiTasks: Task[] = data.tasks.map((t: { id: string; from: string; to: string; message: string; channel: string; timestamp: string; startDate?: string; deadline?: string; status?: TaskStatus }) => {
-        const matched = matchCategory(t.message);
+      const apiTasks: Task[] = data.tasks.map((t: {
+        id: string; from: string; to: string; message: string; channel: string; timestamp: string;
+        startDate?: string; deadline?: string; status?: TaskStatus;
+        category?: string; autoLevel?: AutoLevel; guide?: string; steps?: string[]; topicFile?: string;
+      }) => {
+        // classify 결과가 저장돼 있으면 사용, 없으면 키워드 매칭 폴백
+        const matched = (t.category && t.category !== "미분류")
+          ? { category: t.category, autoLevel: t.autoLevel || "manual" as AutoLevel, guide: t.guide || "", steps: t.steps || [] }
+          : matchCategory(t.message);
         return {
           id: t.id,
           from: t.from,
@@ -490,6 +499,8 @@ export default function Dashboard() {
           guide: matched.guide,
           channel: t.channel,
           timestamp: t.timestamp,
+          steps: matched.steps,
+          topicFile: t.topicFile,
         };
       });
       // GitHub 태스크로 전체 교체 (수동 입력 태스크는 유지)
@@ -532,11 +543,26 @@ export default function Dashboard() {
     setNewFrom("");
     setNewStartDate("");
     setNewDeadline("");
-    // GitHub에도 저장
+    // GitHub에 저장 후 classify로 카테고리 보강
     fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(task),
+    }).catch(() => {});
+    fetch("/api/classify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: newMessage }),
+    }).then((r) => r.json()).then((classified) => {
+      if (classified.category && classified.category !== "미분류") {
+        setTasks((prev) => prev.map((t) => t.id === task.id
+          ? { ...t, category: classified.category, autoLevel: classified.autoLevel, guide: classified.guide, steps: classified.steps, topicFile: classified.topicFile }
+          : t
+        ));
+        fetch("/api/tasks", { method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: task.id, category: classified.category, autoLevel: classified.autoLevel, guide: classified.guide, steps: classified.steps, topicFile: classified.topicFile }),
+        }).catch(() => {});
+      }
     }).catch(() => {});
   };
 
@@ -559,6 +585,19 @@ export default function Dashboard() {
     const matched = matchCategory(editDraft.message);
     setTasks(tasks.map((t) => t.id === id ? { ...t, ...editDraft, category: matched.category, autoLevel: matched.autoLevel, guide: matched.guide } : t));
     fetch("/api/tasks", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...editDraft }) }).catch(() => {});
+    // classify로 카테고리 재분류
+    fetch("/api/classify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: editDraft.message }) })
+      .then((r) => r.json()).then((classified) => {
+        if (classified.category && classified.category !== "미분류") {
+          setTasks((prev) => prev.map((t) => t.id === id
+            ? { ...t, category: classified.category, autoLevel: classified.autoLevel, guide: classified.guide, steps: classified.steps, topicFile: classified.topicFile }
+            : t
+          ));
+          fetch("/api/tasks", { method: "PATCH", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id, category: classified.category, autoLevel: classified.autoLevel, guide: classified.guide, steps: classified.steps, topicFile: classified.topicFile }),
+          }).catch(() => {});
+        }
+      }).catch(() => {});
     setEditingId(null);
   };
 
@@ -566,7 +605,8 @@ export default function Dashboard() {
     const task = tasks.find((t) => t.id === id);
     if (!task) return;
     const matched = matchCategory(task.message);
-    const steps: ExecutionStep[] = matched.steps.map((label) => ({ label, status: "pending" }));
+    const stepLabels = (task.steps && task.steps.length > 0) ? task.steps : matched.steps;
+    const steps: ExecutionStep[] = stepLabels.map((label) => ({ label, status: "pending" }));
 
     // 1. 실행 상태로 전환 + 첫 번째 스텝 running
     const initialSteps = steps.map((s, i) => ({

@@ -18,6 +18,13 @@ export interface GHTask {
   status: "pending" | "in_progress" | "done";
   slackTs?: string;
   notes?: string[]; // 스레드 댓글 키워드
+  // classify 결과
+  category?: string;
+  topicFile?: string;
+  autoLevel?: "auto" | "manual" | "knowledge";
+  guide?: string;
+  steps?: string[];
+  startDate?: string;
 }
 
 // ─── 내부 헬퍼 ───

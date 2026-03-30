@@ -271,6 +271,29 @@ export async function POST(request: NextRequest) {
   await upsertTask(task);
   threadRegistry.set(ts, { taskId, from: fromName });
 
+  // 비동기로 classify 호출 → category/steps 보강 (응답 블로킹 없음)
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000";
+  fetch(`${baseUrl}/api/classify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: cleanMessage }),
+  })
+    .then((r) => r.json())
+    .then((classified) => {
+      if (classified.category && classified.category !== "미분류") {
+        patchTask(taskId, {
+          category: classified.category,
+          topicFile: classified.topicFile,
+          autoLevel: classified.autoLevel,
+          guide: classified.guide,
+          steps: classified.steps,
+        }).catch(() => {});
+      }
+    })
+    .catch(() => {});
+
   return NextResponse.json({ ok: true });
 }
 
