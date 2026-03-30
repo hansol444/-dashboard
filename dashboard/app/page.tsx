@@ -233,33 +233,10 @@ function matchCategory(text: string) {
   return { category: "미분류", autoLevel: "manual" as AutoLevel, guide: "매뉴얼에 없는 업무입니다. 창준님께 확인하세요.", steps: [] };
 }
 
-// ─── 더미 데이터 ───
-const INITIAL_TASKS: Task[] = [
-  {
-    id: "1", from: "이창준", to: "주호연",
-    message: "26Q1 Placement Survey 해줘",
-    category: "Placement 분석", deadline: "2026-03-28",
-    status: "pending", autoLevel: "auto",
-    guide: "Raw → run_jk/am → calc_rms → gen_ppt",
-    channel: "#section-전략추진실-창준님", timestamp: "2026-03-25 11:10",
-  },
-  {
-    id: "2", from: "이창준", to: "임성욱",
-    message: "매크로 3월분 업데이트해줘",
-    category: "Macro 분석", deadline: "2026-03-31",
-    status: "in_progress", autoLevel: "auto",
-    guide: "python update_macro.py",
-    channel: "#section-전략추진실-창준님", timestamp: "2026-03-23 14:00",
-  },
-  {
-    id: "3", from: "이창준", to: "주호연",
-    message: "BCG 측 요청 장표 정리해서 공유해줘",
-    category: "BCG 서포트", deadline: "2026-04-02",
-    status: "pending", autoLevel: "manual",
-    guide: "창준님 지시 기반 판단. 셰어포인트 > 8. 참고자료",
-    channel: "#section-전략추진실-창준님", timestamp: "2026-03-24 16:30",
-  },
-];
+// ─── 초기 데이터 (빈 상태로 시작, GitHub DB에서 로드) ───
+const INITIAL_TASKS: Task[] = [];
+
+
 
 // ─── 컴포넌트 ───
 function StatusBadge({ status }: { status: TaskStatus }) {
