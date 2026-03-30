@@ -92,5 +92,16 @@
       "저장"
     ],
     "topicFile": "regular/macro-update.md"
+  },
+  {
+    "id": "slack-1774859287.436029",
+    "from": "주호연",
+    "to": "김범석",
+    "message": "님, 전략추진실 예산 확인 결과 창준님이 버짓 생각 없이 편하게 사용해도 된다고 하십니다!",
+    "channel": "#wg-전략추진실",
+    "timestamp": "2026. 3. 30. 오후 5:28:07",
+    "deadline": "미정",
+    "status": "pending",
+    "slackTs": "1774859287.436029"
   }
 ]
