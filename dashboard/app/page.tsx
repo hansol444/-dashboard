@@ -496,15 +496,29 @@ export default function Dashboard() {
             timestamp: t.timestamp,
           };
         });
-        // 신규 태스크 추가 (중복 방지) + 삭제된 태스크 제거
+        // 신규 추가 + 업데이트 반영 + 삭제 제거
         setTasks((prev) => {
           const deletedIds: string[] = data.deletedIds || [];
+          const updated: typeof newTasks = (data.updatedTasks || []).map(
+            (t: { id: string; from: string; to: string; message: string; channel: string; timestamp: string; deadline?: string }) => {
+              const matched = matchCategory(t.message);
+              return {
+                id: t.id, from: t.from, to: t.to, message: t.message,
+                category: matched.category, deadline: t.deadline || "미정",
+                status: "pending" as TaskStatus, autoLevel: matched.autoLevel,
+                guide: matched.guide, channel: t.channel, timestamp: t.timestamp,
+              };
+            }
+          );
           const existingIds = new Set(prev.map((t) => t.id));
           const fresh = newTasks.filter((t) => !existingIds.has(t.id));
-          const afterDelete = deletedIds.length > 0
-            ? prev.filter((t) => !deletedIds.includes(t.id))
-            : prev;
-          return fresh.length > 0 ? [...fresh, ...afterDelete] : afterDelete;
+          let result = deletedIds.length > 0 ? prev.filter((t) => !deletedIds.includes(t.id)) : prev;
+          // 업데이트된 태스크 반영 (메시지/마감기한 교체)
+          if (updated.length > 0) {
+            const updMap = new Map(updated.map((t) => [t.id, t]));
+            result = result.map((t) => updMap.has(t.id) ? { ...t, ...updMap.get(t.id) } : t);
+          }
+          return fresh.length > 0 ? [...fresh, ...result] : result;
         });
       }
     } catch {

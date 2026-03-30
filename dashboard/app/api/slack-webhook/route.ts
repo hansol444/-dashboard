@@ -38,17 +38,20 @@ interface SlackTask {
 
 interface PendingTask extends Omit<SlackTask, "deadline"> {}
 
-/** 마감기한 확정된 태스크 */
+/** 신규 확정 태스크 큐 (GET 시 프론트로 전달 후 비움) */
 const confirmedTasks: SlackTask[] = [];
 
-/** 삭제된 태스크 ID 목록 (프론트 폴링 시 전달 후 비움) */
+/** 업데이트된 태스크 큐 (스레드 후속 메시지로 내용/마감기한 갱신) */
+const updatedTasks: SlackTask[] = [];
+
+/** 삭제된 태스크 ID 목록 */
 const deletedTaskIds: string[] = [];
 
 /**
- * 마감기한 미확인 태스크 (스레드 답장 대기 중)
- * key: 원본 메시지의 ts (스레드 루트)
+ * 등록된 태스크 레지스트리 (업데이트 참조용)
+ * key: 원본 메시지 ts
  */
-const awaitingDeadline = new Map<string, PendingTask>();
+const taskRegistry = new Map<string, SlackTask>();
 
 // ─── 유저/채널 매핑 ───
 
@@ -176,23 +179,6 @@ function verifySlackSignature(req: NextRequest, rawBody: string): boolean {
   }
 }
 
-/** Slack 메시지 전송 (스레드 답장 포함) */
-async function sendSlack(channel: string, text: string, threadTs?: string) {
-  const token = process.env.SLACK_BOT_TOKEN;
-  if (!token) {
-    console.log("[Slack] BOT_TOKEN 없음, 메시지 전송 생략:", text);
-    return;
-  }
-  await fetch("https://slack.com/api/chat.postMessage", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ channel, text, thread_ts: threadTs }),
-  });
-}
-
 // ─── 라우트 핸들러 ───
 
 export async function POST(request: NextRequest) {
@@ -212,18 +198,14 @@ export async function POST(request: NextRequest) {
   if (body.type !== "event_callback") return NextResponse.json({ ok: true });
 
   const event = body.event;
-
   if (event.type !== "message") return NextResponse.json({ ok: true });
 
-  // 메시지 삭제 이벤트 처리
+  // ── 메시지 삭제 ──
   if (event.subtype === "message_deleted") {
     const deletedId = `slack-${event.deleted_ts}`;
-    // confirmedTasks에서 제거
     const idx = confirmedTasks.findIndex((t) => t.id === deletedId);
     if (idx !== -1) confirmedTasks.splice(idx, 1);
-    // awaitingDeadline에서도 제거
-    awaitingDeadline.delete(event.deleted_ts);
-    // 프론트에 삭제 신호 전달
+    taskRegistry.delete(event.deleted_ts);
     deletedTaskIds.push(deletedId);
     return NextResponse.json({ ok: true });
   }
@@ -236,34 +218,31 @@ export async function POST(request: NextRequest) {
   const ts: string = event.ts;
   const threadTs: string | undefined = event.thread_ts;
 
-  // ── Case 1: 마감기한 되묻기에 대한 스레드 답장 ──
-  if (threadTs && awaitingDeadline.has(threadTs)) {
-    const pending = awaitingDeadline.get(threadTs)!;
-    const deadline = parseDeadline(text);
+  // ── Case 1: 스레드 후속 메시지 — 같은 발신자가 이어서 내용/마감기한 추가 ──
+  if (threadTs && taskRegistry.has(threadTs)) {
+    const existing = taskRegistry.get(threadTs)!;
 
-    if (deadline) {
-      awaitingDeadline.delete(threadTs);
-      const task: SlackTask = { ...pending, deadline };
-      confirmedTasks.push(task);
-      if (confirmedTasks.length > 100) confirmedTasks.shift();
+    // 같은 사람이 스레드에 추가 메시지를 보낸 경우만 처리
+    if (existing.from === (USER_MAP[event.user] || event.user)) {
+      const extra = cleanSlackText(text);
+      const newDeadline = parseDeadline(text);
 
-      await sendSlack(
-        channel,
-        `✅ *${task.to}*님 업무가 대시보드에 등록됐습니다!\n• 마감: ${deadline}\n• 내용: ${task.message}`,
-        threadTs
-      );
-    } else {
-      // 날짜 인식 실패 → 다시 물어봄
-      await sendSlack(
-        channel,
-        `날짜를 인식하지 못했어요 :sweat_smile:\n다음 형식으로 알려주세요:\n> "이번주 금요일" · "3월 28일" · "2026-03-31" · "내일"`,
-        threadTs
-      );
+      const updated: SlackTask = {
+        ...existing,
+        // 내용 누적 (최대 300자)
+        message: (existing.message + " / " + extra).slice(0, 300),
+        // 마감기한이 "미정"이었다면 새로 찾은 걸로 교체
+        deadline: existing.deadline === "미정" && newDeadline ? newDeadline : existing.deadline,
+      };
+
+      taskRegistry.set(threadTs, updated);
+      updatedTasks.push(updated);
+      if (updatedTasks.length > 100) updatedTasks.shift();
     }
     return NextResponse.json({ ok: true });
   }
 
-  // ── Case 2: 신규 메시지 - @멘션이 있는 메시지만 처리 ──
+  // ── Case 2: 신규 메시지 — @멘션이 있는 메시지만 처리 ──
   const mentioned = extractMentionedUser(text);
   if (!mentioned) return NextResponse.json({ ok: true });
 
@@ -272,47 +251,36 @@ export async function POST(request: NextRequest) {
   const cleanMessage = cleanSlackText(text);
   if (!cleanMessage) return NextResponse.json({ ok: true });
 
-  const taskBase: PendingTask = {
+  const task: SlackTask = {
     id: `slack-${ts}`,
     from: fromName,
     to: mentioned.name,
     message: cleanMessage,
     channel: channelName,
     timestamp: new Date(parseFloat(ts) * 1000).toLocaleString("ko-KR"),
+    deadline: parseDeadline(text) ?? "미정",
     slackTs: ts,
   };
 
-  const deadline = parseDeadline(text);
-
-  if (!deadline) {
-    // 마감기한 없음 → 스레드로 물어봄
-    awaitingDeadline.set(ts, taskBase);
-    await sendSlack(
-      channel,
-      `:wave: *${mentioned.name}*님 업무를 대시보드에 등록할게요.\n마감 기한을 확인할 수 없었어요. 언제까지 완료하면 될까요?`,
-      ts
-    );
-  } else {
-    // 마감기한 있음 → 바로 등록
-    const task: SlackTask = { ...taskBase, deadline };
-    confirmedTasks.push(task);
-    if (confirmedTasks.length > 100) confirmedTasks.shift();
-
-    await sendSlack(
-      channel,
-      `✅ *${mentioned.name}*님 업무가 대시보드에 등록됐습니다!\n• 마감: ${deadline}\n• 내용: ${cleanMessage}`,
-      ts
-    );
-  }
+  taskRegistry.set(ts, task);
+  confirmedTasks.push(task);
+  if (confirmedTasks.length > 100) confirmedTasks.shift();
 
   return NextResponse.json({ ok: true });
 }
 
-/** GET: 대시보드 폴링 — 신규 태스크 + 삭제 ID 반환 후 비움 */
+/**
+ * GET: 대시보드 폴링
+ * - tasks: 신규 태스크
+ * - updatedTasks: 스레드 후속으로 내용/마감기한이 갱신된 태스크
+ * - deletedIds: 삭제된 태스크 ID
+ */
 export async function GET() {
   const tasks = [...confirmedTasks];
+  const updated = [...updatedTasks];
   const deletedIds = [...deletedTaskIds];
   confirmedTasks.length = 0;
+  updatedTasks.length = 0;
   deletedTaskIds.length = 0;
-  return NextResponse.json({ tasks, deletedIds });
+  return NextResponse.json({ tasks, updatedTasks: updated, deletedIds });
 }
