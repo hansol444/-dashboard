@@ -1,84 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { spawn } from "child_process";
-import path from "path";
 
 /**
  * 에이전트 실행 API
  * POST /api/agents
  * body: { category: string, params?: Record<string, string> }
  *
- * 각 카테고리에 맞는 스크립트를 실행하고 stdout/stderr를 반환합니다.
+ * Vercel 환경에서는 로컬 스크립트 실행 불가.
+ * 실행 가이드와 시뮬레이션 응답을 반환합니다.
  */
 
-const WORKSPACE_ROOT = path.resolve(process.cwd(), "..");
-
-interface AgentConfig {
-  command: string;
-  args: string[];
-  cwd: string;
-  description: string;
-  outputPath?: string;
-}
-
-function getAgentConfig(category: string, params: Record<string, string> = {}): AgentConfig | null {
-  switch (category) {
-    case "Macro 분석":
-      return {
-        command: "python",
-        args: ["update_macro.py"],
-        cwd: WORKSPACE_ROOT,
-        description: "KOSIS 데이터 → Macro Analysis 엑셀 업데이트",
-        outputPath: "Macro Analysis.xlsx",
-      };
-
-    case "장표 번역":
-      return {
-        command: "python",
-        args: [
-          "translate.py",
-          ...(params.input ? ["--input", params.input] : []),
-          ...(params.output ? ["--output", params.output] : []),
-        ],
-        cwd: path.join(WORKSPACE_ROOT, "ppt-translate"),
-        description: "한글 PPT → 영문 PPT 번역",
-        outputPath: params.output || "ppt-translate/output/translated.pptx",
-      };
-
-    case "예산·구매 품의":
-      return {
-        command: "node",
-        args: [
-          "fill.js",
-          params.docType || "survey-b",
-          ...(params.dryRun !== "false" ? ["--dry-run"] : []),
-        ],
-        cwd: WORKSPACE_ROOT,
-        description: "전자결재 양식 자동 입력",
-      };
-
-    case "회의록 생성":
-      return {
-        command: "python",
-        args: [
-          "summarize.py",
-          params.inputFile || "input/meeting.txt",
-          ...(params.notion === "true" ? ["--notion"] : []),
-        ],
-        cwd: path.join(WORKSPACE_ROOT, "meeting-notes"),
-        description: "TXT → Claude 요약 → Notion 등록",
-        outputPath: "meeting-notes/output/summary.json",
-      };
-
-    default:
-      return null;
-  }
-}
+const AGENT_CONFIGS: Record<string, { command: string; description: string; steps: string[] }> = {
+  "Macro 분석": {
+    command: "python update_macro.py",
+    description: "KOSIS 데이터 → Macro Analysis 엑셀 업데이트",
+    steps: ["KOSIS 파일 탐색", "데이터 읽기", "Macro 엑셀 열기", "10개 시트 업데이트", "저장"],
+  },
+  "장표 번역": {
+    command: "python ppt-translate/translate.py --input input/파일.pptx",
+    description: "한글 PPT → 영문 PPT 번역",
+    steps: ["PPT 파일 로드", "텍스트박스 크기 분석", "용어집 로드", "Claude API 번역", "번역 PPT 저장"],
+  },
+  "예산·구매 품의": {
+    command: "node fill.js survey-b --dry-run",
+    description: "전자결재 양식 자동 입력",
+    steps: ["문서유형 판단", "템플릿 로드", "폼 자동 입력 (dry-run)", "사용자 검수", "실제 제출"],
+  },
+  "회의록 생성": {
+    command: "python meeting-notes/summarize.py input/회의록.txt --notion",
+    description: "TXT → Claude 요약 → Notion 등록",
+    steps: ["TXT 파일 읽기", "구조화 요약 생성", "업무지시 추출", "프리뷰 생성", "Notion 등록"],
+  },
+};
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { category, params = {} } = body;
+  const { category } = body;
 
-  const config = getAgentConfig(category, params);
+  const config = AGENT_CONFIGS[category];
   if (!config) {
     return NextResponse.json(
       { error: `지원하지 않는 카테고리: ${category}` },
@@ -86,57 +44,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  try {
-    const result = await new Promise<{
-      stdout: string;
-      stderr: string;
-      exitCode: number;
-    }>((resolve) => {
-      const proc = spawn(config.command, config.args, {
-        cwd: config.cwd,
-        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
-        shell: true,
-      });
-
-      let stdout = "";
-      let stderr = "";
-
-      proc.stdout.on("data", (data) => {
-        stdout += data.toString();
-      });
-
-      proc.stderr.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      proc.on("close", (code) => {
-        resolve({ stdout, stderr, exitCode: code ?? 1 });
-      });
-
-      // 5분 타임아웃
-      setTimeout(() => {
-        proc.kill();
-        resolve({ stdout, stderr: stderr + "\n[TIMEOUT] 5분 초과", exitCode: 1 });
-      }, 300000);
-    });
-
-    return NextResponse.json({
-      success: result.exitCode === 0,
-      description: config.description,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      exitCode: result.exitCode,
-      outputPath: config.outputPath,
-    });
-  } catch (err) {
-    return NextResponse.json(
-      { error: `실행 실패: ${err}` },
-      { status: 500 }
-    );
-  }
+  // 로컬 실행 환경에서만 실제 스크립트 실행 가능
+  // Vercel에서는 가이드 + 시뮬레이션 반환
+  return NextResponse.json({
+    success: true,
+    description: config.description,
+    command: config.command,
+    steps: config.steps,
+    message: "로컬 환경에서 위 명령어를 실행하세요.",
+  });
 }
 
-// GET: 지원 에이전트 목록 조회
 export async function GET() {
   return NextResponse.json({
     agents: [
