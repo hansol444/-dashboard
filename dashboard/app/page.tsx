@@ -485,7 +485,7 @@ export default function Dashboard() {
           category: matched.category,
           startDate: t.startDate || "",
           deadline: t.deadline || "미정",
-          status: (t.status === "running" ? "in_progress" : t.status) || "pending" as TaskStatus,
+          status: (t.status as string) === "running" ? "in_progress" as TaskStatus : (t.status as TaskStatus) || "pending",
           autoLevel: matched.autoLevel,
           guide: matched.guide,
           channel: t.channel,
@@ -796,7 +796,7 @@ export default function Dashboard() {
             {filtered.map((task) => {
               const isEditing = editingId === task.id;
               return (
-              <div key={task.id} className="p-4 rounded-xl transition-all" style={{ background: "var(--surface)", border: `1px solid ${task.status === "running" ? "var(--accent)" : "var(--border)"}` }}>
+              <div key={task.id} className="p-4 rounded-xl transition-all" style={{ background: "var(--surface)", border: `1px solid var(--border)` }}>
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <StatusBadge status={task.status} />
@@ -1075,6 +1075,7 @@ export default function Dashboard() {
                               to: ta.assignee,
                               message: ta.task,
                               category: matched.category,
+                              startDate: "",
                               deadline: ta.deadline,
                               status: "pending",
                               autoLevel: matched.autoLevel,
@@ -1097,8 +1098,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ─── 탭: 캘린더 ─── */}
-      {activeTab === "calendar" && (() => {
+      {/* ─── 탭: 캘린더 (탭 제거됨 - 인라인으로 이동) ─── */}
+      {(false as boolean) && (() => {
         const { year, month } = calMonth;
         const firstDay = new Date(year, month, 1).getDay(); // 0=일
         const daysInMonth = new Date(year, month + 1, 0).getDate();
