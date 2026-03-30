@@ -48,5 +48,19 @@
       "검토 후 저장"
     ],
     "topicFile": "fluid/ppt-work.md"
+  },
+  {
+    "id": "manual-1774856802842",
+    "from": "나",
+    "to": "주호연",
+    "message": "Placement survey",
+    "category": "미분류",
+    "startDate": "",
+    "deadline": "미정",
+    "status": "pending",
+    "autoLevel": "manual",
+    "guide": "매뉴얼에 없는 업무입니다. 창준님께 확인하세요.",
+    "channel": "수동 입력",
+    "timestamp": "2026. 3. 30. 오후 4:46:42"
   }
 ]
