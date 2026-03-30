@@ -28,28 +28,6 @@
     "timestamp": "2026. 3. 30. 오후 3:28:02"
   },
   {
-    "id": "manual-1774856741418",
-    "from": "나",
-    "to": "주호연",
-    "message": "장표 번역",
-    "category": "장표 제작/번역",
-    "startDate": "",
-    "deadline": "미정",
-    "status": "in_progress",
-    "autoLevel": "auto",
-    "guide": "장표: Claude/Genspark | 번역: python ppt-translate/translate.py",
-    "channel": "수동 입력",
-    "timestamp": "2026. 3. 30. 오후 4:45:41",
-    "steps": [
-      "스토리라인 구성",
-      "슬라이드 제작",
-      "데이터 삽입",
-      "디자인 적용",
-      "검토 후 저장"
-    ],
-    "topicFile": "fluid/ppt-work.md"
-  },
-  {
     "id": "manual-1774857797751",
     "from": "미지정",
     "to": "주호연",
