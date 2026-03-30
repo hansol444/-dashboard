@@ -76,13 +76,21 @@
     "from": "미지정",
     "to": "주호연",
     "message": "매크로 분석",
-    "category": "Macro 분석",
+    "category": "Macro 업데이트",
     "startDate": "",
     "deadline": "미정",
     "status": "pending",
     "autoLevel": "auto",
     "guide": "python update_macro.py",
     "channel": "수동 입력",
-    "timestamp": "2026. 3. 30. 오후 5:07:17"
+    "timestamp": "2026. 3. 30. 오후 5:07:17",
+    "steps": [
+      "KOSIS 파일 탐색",
+      "데이터 읽기",
+      "Macro 엑셀 열기",
+      "10개 시트 업데이트",
+      "저장"
+    ],
+    "topicFile": "regular/macro-update.md"
   }
 ]
