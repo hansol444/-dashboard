@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { upsertTask, removeTask, patchTask } from "../../../lib/github-db";
 
 /**
  * 슬랙 웹훅 수신 엔드포인트
@@ -38,20 +39,11 @@ interface SlackTask {
 
 interface PendingTask extends Omit<SlackTask, "deadline"> {}
 
-/** 신규 확정 태스크 큐 (GET 시 프론트로 전달 후 비움) */
-const confirmedTasks: SlackTask[] = [];
-
-/** 업데이트된 태스크 큐 (스레드 후속 메시지로 내용/마감기한 갱신) */
-const updatedTasks: SlackTask[] = [];
-
-/** 삭제된 태스크 ID 목록 */
-const deletedTaskIds: string[] = [];
-
 /**
- * 등록된 태스크 레지스트리 (업데이트 참조용)
- * key: 원본 메시지 ts
+ * 스레드 추적용 인메모리 레지스트리 (단기 상태, 영속 불필요)
+ * key: 원본 메시지 ts → 태스크 id + 발신자
  */
-const taskRegistry = new Map<string, SlackTask>();
+const threadRegistry = new Map<string, { taskId: string; from: string }>();
 
 // ─── 유저/채널 매핑 ───
 
@@ -200,13 +192,11 @@ export async function POST(request: NextRequest) {
   const event = body.event;
   if (event.type !== "message") return NextResponse.json({ ok: true });
 
-  // ── 메시지 삭제 ──
+  // ── 메시지 삭제 → GitHub에서 제거 ──
   if (event.subtype === "message_deleted") {
     const deletedId = `slack-${event.deleted_ts}`;
-    const idx = confirmedTasks.findIndex((t) => t.id === deletedId);
-    if (idx !== -1) confirmedTasks.splice(idx, 1);
-    taskRegistry.delete(event.deleted_ts);
-    deletedTaskIds.push(deletedId);
+    threadRegistry.delete(event.deleted_ts);
+    await removeTask(deletedId).catch(() => {});
     return NextResponse.json({ ok: true });
   }
 
@@ -218,26 +208,24 @@ export async function POST(request: NextRequest) {
   const ts: string = event.ts;
   const threadTs: string | undefined = event.thread_ts;
 
-  // ── Case 1: 스레드 후속 메시지 — 같은 발신자가 이어서 내용/마감기한 추가 ──
-  if (threadTs && taskRegistry.has(threadTs)) {
-    const existing = taskRegistry.get(threadTs)!;
+  // ── Case 1: 스레드 후속 메시지 — 같은 발신자가 내용/마감기한 추가 ──
+  if (threadTs && threadRegistry.has(threadTs)) {
+    const { taskId, from } = threadRegistry.get(threadTs)!;
+    const fromName = USER_MAP[event.user] || event.user;
 
-    // 같은 사람이 스레드에 추가 메시지를 보낸 경우만 처리
-    if (existing.from === (USER_MAP[event.user] || event.user)) {
+    if (from === fromName) {
       const extra = cleanSlackText(text);
       const newDeadline = parseDeadline(text);
-
-      const updated: SlackTask = {
-        ...existing,
-        // 내용 누적 (최대 300자)
-        message: (existing.message + " / " + extra).slice(0, 300),
-        // 마감기한이 "미정"이었다면 새로 찾은 걸로 교체
-        deadline: existing.deadline === "미정" && newDeadline ? newDeadline : existing.deadline,
-      };
-
-      taskRegistry.set(threadTs, updated);
-      updatedTasks.push(updated);
-      if (updatedTasks.length > 100) updatedTasks.shift();
+      // GitHub에서 현재 태스크 읽어서 업데이트
+      const { getAllTasks } = await import("../../../lib/github-db");
+      const all = await getAllTasks();
+      const existing = all.find((t) => t.id === taskId);
+      if (existing) {
+        await patchTask(taskId, {
+          message: (existing.message + " / " + extra).slice(0, 300),
+          ...(existing.deadline === "미정" && newDeadline ? { deadline: newDeadline } : {}),
+        });
+      }
     }
     return NextResponse.json({ ok: true });
   }
@@ -251,36 +239,27 @@ export async function POST(request: NextRequest) {
   const cleanMessage = cleanSlackText(text);
   if (!cleanMessage) return NextResponse.json({ ok: true });
 
-  const task: SlackTask = {
-    id: `slack-${ts}`,
+  const taskId = `slack-${ts}`;
+  const task = {
+    id: taskId,
     from: fromName,
     to: mentioned.name,
     message: cleanMessage,
     channel: channelName,
     timestamp: new Date(parseFloat(ts) * 1000).toLocaleString("ko-KR"),
     deadline: parseDeadline(text) ?? "미정",
+    status: "pending" as const,
     slackTs: ts,
   };
 
-  taskRegistry.set(ts, task);
-  confirmedTasks.push(task);
-  if (confirmedTasks.length > 100) confirmedTasks.shift();
+  // GitHub에 저장 + 스레드 추적
+  await upsertTask(task);
+  threadRegistry.set(ts, { taskId, from: fromName });
 
   return NextResponse.json({ ok: true });
 }
 
-/**
- * GET: 대시보드 폴링
- * - tasks: 신규 태스크
- * - updatedTasks: 스레드 후속으로 내용/마감기한이 갱신된 태스크
- * - deletedIds: 삭제된 태스크 ID
- */
+/** GET: Slack URL 검증용 (대시보드는 /api/tasks에서 읽음) */
 export async function GET() {
-  const tasks = [...confirmedTasks];
-  const updated = [...updatedTasks];
-  const deletedIds = [...deletedTaskIds];
-  confirmedTasks.length = 0;
-  updatedTasks.length = 0;
-  deletedTaskIds.length = 0;
-  return NextResponse.json({ tasks, updatedTasks: updated, deletedIds });
+  return NextResponse.json({ ok: true });
 }

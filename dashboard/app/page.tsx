@@ -474,69 +474,51 @@ export default function Dashboard() {
   const [meetings, setMeetings] = useState<MeetingSummary[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 슬랙 웹훅에서 새 태스크 폴링
-  const pollSlack = useCallback(async () => {
+  // GitHub DB에서 전체 태스크 폴링 (30초마다)
+  const pollTasks = useCallback(async () => {
     try {
-      const res = await fetch("/api/slack-webhook");
+      const res = await fetch("/api/tasks");
       const data = await res.json();
-      if (data.tasks && data.tasks.length > 0) {
-        const newTasks: Task[] = data.tasks.map((t: { id: string; from: string; to: string; message: string; channel: string; timestamp: string; deadline?: string }) => {
-          const matched = matchCategory(t.message);
-          return {
-            id: t.id,
-            from: t.from,
-            to: t.to,
-            message: t.message,
-            category: matched.category,
-            deadline: t.deadline || "미정",
-            status: "pending" as TaskStatus,
-            autoLevel: matched.autoLevel,
-            guide: matched.guide,
-            channel: t.channel,
-            timestamp: t.timestamp,
-          };
-        });
-        // 신규 추가 + 업데이트 반영 + 삭제 제거
-        setTasks((prev) => {
-          const deletedIds: string[] = data.deletedIds || [];
-          const updated: typeof newTasks = (data.updatedTasks || []).map(
-            (t: { id: string; from: string; to: string; message: string; channel: string; timestamp: string; deadline?: string }) => {
-              const matched = matchCategory(t.message);
-              return {
-                id: t.id, from: t.from, to: t.to, message: t.message,
-                category: matched.category, deadline: t.deadline || "미정",
-                status: "pending" as TaskStatus, autoLevel: matched.autoLevel,
-                guide: matched.guide, channel: t.channel, timestamp: t.timestamp,
-              };
-            }
-          );
-          const existingIds = new Set(prev.map((t) => t.id));
-          const fresh = newTasks.filter((t) => !existingIds.has(t.id));
-          let result = deletedIds.length > 0 ? prev.filter((t) => !deletedIds.includes(t.id)) : prev;
-          // 업데이트된 태스크 반영 (메시지/마감기한 교체)
-          if (updated.length > 0) {
-            const updMap = new Map(updated.map((t) => [t.id, t]));
-            result = result.map((t) => updMap.has(t.id) ? { ...t, ...updMap.get(t.id) } : t);
-          }
-          return fresh.length > 0 ? [...fresh, ...result] : result;
-        });
-      }
+      if (!data.tasks) return;
+      const apiTasks: Task[] = data.tasks.map((t: { id: string; from: string; to: string; message: string; channel: string; timestamp: string; deadline?: string; status?: TaskStatus }) => {
+        const matched = matchCategory(t.message);
+        return {
+          id: t.id,
+          from: t.from,
+          to: t.to,
+          message: t.message,
+          category: matched.category,
+          deadline: t.deadline || "미정",
+          status: t.status || "pending" as TaskStatus,
+          autoLevel: matched.autoLevel,
+          guide: matched.guide,
+          channel: t.channel,
+          timestamp: t.timestamp,
+        };
+      });
+      // GitHub 태스크로 전체 교체 (수동 입력 태스크는 유지)
+      setTasks((prev) => {
+        const manual = prev.filter((t) => t.channel === "수동 입력");
+        const apiIds = new Set(apiTasks.map((t) => t.id));
+        const freshManual = manual.filter((t) => !apiIds.has(t.id));
+        return [...apiTasks, ...freshManual];
+      });
     } catch {
       // 서버 미연결 시 무시
     }
   }, []);
 
   useEffect(() => {
-    pollSlack();
-    const interval = setInterval(pollSlack, 10000); // 10초마다 폴링
+    pollTasks();
+    const interval = setInterval(pollTasks, 30000); // 30초마다 폴링
     return () => clearInterval(interval);
-  }, [pollSlack]);
+  }, [pollTasks]);
 
-  const addTask = () => {
+  const addTask = async () => {
     if (!newMessage.trim()) return;
     const matched = matchCategory(newMessage);
     const task: Task = {
-      id: Date.now().toString(),
+      id: `manual-${Date.now()}`,
       from: newFrom || "미지정",
       to: newTo,
       message: newMessage,
@@ -552,6 +534,12 @@ export default function Dashboard() {
     setNewMessage("");
     setNewFrom("");
     setNewDeadline("");
+    // GitHub에도 저장
+    fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(task),
+    }).catch(() => {});
   };
 
   const updateStatus = (id: string, status: TaskStatus) => {
