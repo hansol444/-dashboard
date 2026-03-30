@@ -57,7 +57,7 @@
     "category": "Placement Survey 분석",
     "startDate": "",
     "deadline": "미정",
-    "status": "done",
+    "status": "in_progress",
     "autoLevel": "auto",
     "guide": "run_jk.py → calc_rms.py → gen_ppt.py",
     "channel": "수동 입력",
