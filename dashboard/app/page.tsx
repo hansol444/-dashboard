@@ -26,6 +26,7 @@ interface Task {
   timestamp: string;
   executionSteps?: ExecutionStep[];
   outputFile?: string;
+  notes?: string[]; // 스레드 댓글 키워드
 }
 
 interface MeetingSummary {
@@ -450,6 +451,8 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<TabType>("tasks");
   const [meetings, setMeetings] = useState<MeetingSummary[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<{ from: string; to: string; message: string; deadline: string }>({ from: "", to: "", message: "", deadline: "" });
 
   // GitHub DB에서 전체 태스크 폴링 (30초마다)
   const pollTasks = useCallback(async () => {
@@ -521,10 +524,24 @@ export default function Dashboard() {
 
   const updateStatus = (id: string, status: TaskStatus) => {
     setTasks(tasks.map((t) => (t.id === id ? { ...t, status } : t)));
+    fetch("/api/tasks", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) }).catch(() => {});
   };
 
   const removeTask = (id: string) => {
     setTasks(tasks.filter((t) => t.id !== id));
+    fetch("/api/tasks", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }).catch(() => {});
+  };
+
+  const startEdit = (task: Task) => {
+    setEditingId(task.id);
+    setEditDraft({ from: task.from, to: task.to, message: task.message, deadline: task.deadline });
+  };
+
+  const saveEdit = (id: string) => {
+    const matched = matchCategory(editDraft.message);
+    setTasks(tasks.map((t) => t.id === id ? { ...t, ...editDraft, category: matched.category, autoLevel: matched.autoLevel, guide: matched.guide } : t));
+    fetch("/api/tasks", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...editDraft }) }).catch(() => {});
+    setEditingId(null);
   };
 
   const runTask = async (id: string) => {
@@ -739,7 +756,9 @@ export default function Dashboard() {
                 업무가 없습니다. 위에서 추가하거나 슬랙 연동을 설정하세요.
               </div>
             )}
-            {filtered.map((task) => (
+            {filtered.map((task) => {
+              const isEditing = editingId === task.id;
+              return (
               <div key={task.id} className="p-4 rounded-xl transition-all" style={{ background: "var(--surface)", border: `1px solid ${task.status === "running" ? "var(--accent)" : "var(--border)"}` }}>
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
@@ -748,14 +767,49 @@ export default function Dashboard() {
                     <span className="text-sm font-medium">{task.category}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>~{task.deadline}</span>
-                    {task.status === "done" && (
-                      <button onClick={() => removeTask(task.id)} className="text-xs text-red-400 hover:text-red-300">✕</button>
-                    )}
+                    {!isEditing && <span className="text-xs" style={{ color: "var(--text-muted)" }}>~{task.deadline}</span>}
+                    <button onClick={() => isEditing ? setEditingId(null) : startEdit(task)}
+                      className="text-xs px-2 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-white transition-all">
+                      {isEditing ? "취소" : "✏️"}
+                    </button>
+                    <button onClick={() => removeTask(task.id)} className="text-xs text-red-400 hover:text-red-300">✕</button>
                   </div>
                 </div>
 
-                <p className="text-sm mb-2">&ldquo;{task.message}&rdquo;</p>
+                {isEditing ? (
+                  <div className="space-y-2 mb-3">
+                    <div className="flex gap-2">
+                      <input value={editDraft.from} onChange={(e) => setEditDraft({ ...editDraft, from: e.target.value })}
+                        placeholder="지시자" className="flex-1 px-2 py-1 rounded text-xs bg-black border border-gray-700 text-white" />
+                      <span className="text-gray-500 text-xs self-center">→</span>
+                      <input value={editDraft.to} onChange={(e) => setEditDraft({ ...editDraft, to: e.target.value })}
+                        placeholder="수행자" className="flex-1 px-2 py-1 rounded text-xs bg-black border border-gray-700 text-white" />
+                      <input type="date" value={editDraft.deadline} onChange={(e) => setEditDraft({ ...editDraft, deadline: e.target.value })}
+                        className="px-2 py-1 rounded text-xs bg-black border border-gray-700 text-white" />
+                    </div>
+                    <div className="flex gap-2">
+                      <input value={editDraft.message} onChange={(e) => setEditDraft({ ...editDraft, message: e.target.value })}
+                        placeholder="업무 내용" className="flex-1 px-2 py-1 rounded text-xs bg-black border border-gray-700 text-white" />
+                      <button onClick={() => saveEdit(task.id)}
+                        className="px-3 py-1 rounded text-xs font-medium text-black" style={{ background: "var(--accent)" }}>
+                        저장
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm mb-2">&ldquo;{task.message}&rdquo;</p>
+                    {task.notes && task.notes.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {task.notes.map((note, i) => (
+                          <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-gray-800 text-gray-300 border border-gray-700">
+                            {note}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
 
                 <div className="flex items-center justify-between">
                   <div className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -790,7 +844,8 @@ export default function Dashboard() {
                   <TaskGuide task={task} />
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* 자동 처리 Skill 현황 */}

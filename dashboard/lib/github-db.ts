@@ -17,6 +17,7 @@ export interface GHTask {
   deadline: string;
   status: "pending" | "in_progress" | "done";
   slackTs?: string;
+  notes?: string[]; // 스레드 댓글 키워드
 }
 
 // ─── 내부 헬퍼 ───

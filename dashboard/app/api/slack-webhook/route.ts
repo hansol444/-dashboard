@@ -67,6 +67,13 @@ const CHANNEL_MAP: Record<string, string> = {
 
 // ─── 유틸 함수 ───
 
+/** 텍스트에서 의미있는 키워드 추출 (한국어 조사/접속사 제거) */
+function extractKeywords(text: string): string[] {
+  const stopWords = new Set(["이거", "이게", "그거", "저거", "이건", "그건", "해줘", "해주세요", "부탁", "감사", "좋아", "알겠", "네", "예", "응", "ㅇㅇ", "ㅇㅋ", "ㄱㄱ", "일단", "그냥", "좀", "한번", "다시", "혹시"]);
+  const words = text.split(/[\s,·\/\-\|]+/).map((w) => w.trim()).filter((w) => w.length >= 2 && !stopWords.has(w));
+  return [...new Set(words)].slice(0, 3); // 중복 제거 후 최대 3개
+}
+
 /** 첫 번째 @멘션 유저 추출 */
 function extractMentionedUser(text: string): { id: string; name: string } | null {
   const match = text.match(/<@(U[A-Z0-9]+)>/);
@@ -208,23 +215,31 @@ export async function POST(request: NextRequest) {
   const ts: string = event.ts;
   const threadTs: string | undefined = event.thread_ts;
 
-  // ── Case 1: 스레드 후속 메시지 — 같은 발신자가 내용/마감기한 추가 ──
+  // ── Case 1: 스레드 후속 메시지 ──
   if (threadTs && threadRegistry.has(threadTs)) {
     const { taskId, from } = threadRegistry.get(threadTs)!;
     const fromName = USER_MAP[event.user] || event.user;
+    const cleanedText = cleanSlackText(text);
+    if (!cleanedText) return NextResponse.json({ ok: true });
+
+    const { getAllTasks } = await import("../../../lib/github-db");
+    const all = await getAllTasks();
+    const existing = all.find((t) => t.id === taskId);
+    if (!existing) return NextResponse.json({ ok: true });
 
     if (from === fromName) {
-      const extra = cleanSlackText(text);
+      // 같은 발신자 → 업무 내용/마감기한 보강
       const newDeadline = parseDeadline(text);
-      // GitHub에서 현재 태스크 읽어서 업데이트
-      const { getAllTasks } = await import("../../../lib/github-db");
-      const all = await getAllTasks();
-      const existing = all.find((t) => t.id === taskId);
-      if (existing) {
-        await patchTask(taskId, {
-          message: (existing.message + " / " + extra).slice(0, 300),
-          ...(existing.deadline === "미정" && newDeadline ? { deadline: newDeadline } : {}),
-        });
+      await patchTask(taskId, {
+        message: (existing.message + " / " + cleanedText).slice(0, 300),
+        ...(existing.deadline === "미정" && newDeadline ? { deadline: newDeadline } : {}),
+      });
+    } else {
+      // 다른 사람 댓글 → keywords로 notes에 추가
+      const keywords = extractKeywords(cleanedText);
+      if (keywords.length > 0) {
+        const currentNotes: string[] = (existing as { notes?: string[] }).notes || [];
+        await patchTask(taskId, { notes: [...currentNotes, ...keywords].slice(-10) });
       }
     }
     return NextResponse.json({ ok: true });
