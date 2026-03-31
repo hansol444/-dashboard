@@ -147,5 +147,16 @@
     "deadline": "미정",
     "status": "pending",
     "slackTs": "1774924519.729079"
+  },
+  {
+    "id": "slack-1774929322.464539",
+    "from": "임성욱",
+    "to": "이창준",
+    "message": "님,\n\n워딩 수정 완료했습니다!\n추가적으로 피드백 있으시면 말씀 주시면 감사하겠습니다!\n\n타운홀.pptx",
+    "channel": "#section-전략추진실-창준님",
+    "timestamp": "2026. 3. 31. 오후 12:55:22",
+    "deadline": "미정",
+    "status": "pending",
+    "slackTs": "1774929322.464539"
   }
 ]
