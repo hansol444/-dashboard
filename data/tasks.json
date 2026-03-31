@@ -35,7 +35,7 @@
     "category": "Macro 업데이트",
     "startDate": "",
     "deadline": "미정",
-    "status": "pending",
+    "status": "in_progress",
     "autoLevel": "auto",
     "guide": "python update_macro.py",
     "channel": "수동 입력",
