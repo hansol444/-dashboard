@@ -36,7 +36,8 @@ interface MeetingNote {
 const AGENT_TOPICS = new Set([
   "regular/macro-update",
   "regular/placement-analysis",
-  "fluid/ppt-work",
+  "fluid/ppt-create",
+  "fluid/ppt-translate",
 ]);
 
 // topic별 담당자 (Context/Directory.md 기반)
@@ -45,7 +46,8 @@ const TOPIC_CONTACTS: Record<string, string[]> = {
   "regular/macro-indicators":   ["창준님"],
   "regular/placement-update":   ["엠브레인 문주원님", "창준님"],
   "regular/placement-analysis": ["엠브레인 문주원님", "창준님"],
-  "fluid/ppt-work":             ["창준님"],
+  "fluid/ppt-create":           ["창준님"],
+  "fluid/ppt-translate":        ["창준님"],
   "fluid/academia-contract":    ["총무팀 이민희님", "총무팀 남영현님", "KT alpha 강석현님"],
   "budget/placement-concur":    ["엠브레인 문주원님", "재무회계팀 박은미님/왕윤형님"],
   "budget/enkoline-concur":     ["재무회계팀 박은미님/왕윤형님"],
@@ -80,6 +82,7 @@ export default function TaskDetailPage() {
   const [agentRunning, setAgentRunning] = useState(false);
   const [agentResult, setAgentResult] = useState<string | null>(null);
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
+  const [placementQuarter, setPlacementQuarter] = useState("26Q1");
 
   useEffect(() => {
     fetch("/api/tasks")
@@ -115,11 +118,15 @@ export default function TaskDetailPage() {
     if (!task) return;
     setAgentRunning(true);
     setAgentResult(null);
+    const agentParams: Record<string, string> | undefined =
+      task.topicFile === "regular/placement-analysis"
+        ? { quarter: placementQuarter }
+        : undefined;
     try {
       const res = await fetch("/api/agents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category: task.category }),
+        body: JSON.stringify({ topicFile: task.topicFile, params: agentParams }),
       });
       const data = await res.json();
       setAgentResult(data.success
@@ -217,6 +224,19 @@ export default function TaskDetailPage() {
                   <span>{step}</span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {task.topicFile === "regular/placement-analysis" && (
+            <div className="flex items-center gap-2 mb-3">
+              <label className="text-xs shrink-0" style={{ color: "var(--text-muted)" }}>분기</label>
+              <input
+                value={placementQuarter}
+                onChange={(e) => setPlacementQuarter(e.target.value)}
+                placeholder="예: 26Q1"
+                className="flex-1 px-3 py-1.5 rounded-lg text-xs"
+                style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)" }}
+              />
             </div>
           )}
 

@@ -136,7 +136,7 @@ def summarize_with_claude(transcript: str) -> dict:
     return json.loads(json_str)
 
 
-def save_output(result: dict, input_path: str) -> str:
+def save_output(result: dict, input_path: str) -> tuple[str, str]:
     output_dir = Path(__file__).parent / "output"
     output_dir.mkdir(exist_ok=True)
 
@@ -146,7 +146,55 @@ def save_output(result: dict, input_path: str) -> str:
     output_path = output_dir / output_name
 
     output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    return str(output_path)
+    return str(output_path), output_name
+
+
+def upload_to_github(result: dict, output_name: str) -> bool:
+    """GitHub repo의 data/meeting-notes/에 요약 JSON 업로드"""
+    import base64
+    import urllib.request
+
+    github_token = os.getenv("GITHUB_TOKEN")
+    if not github_token:
+        return False
+
+    repo = "IMHY-dev/-dashboard"
+    file_path = f"data/meeting-notes/{output_name}"
+    content = json.dumps(result, ensure_ascii=False, indent=2)
+    encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+    headers = {
+        "Authorization": f"token {github_token}",
+        "Accept": "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
+    }
+
+    # 기존 파일 SHA 확인
+    sha = None
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{repo}/contents/{file_path}",
+            headers=headers,
+        )
+        with urllib.request.urlopen(req) as resp:
+            sha = json.loads(resp.read()).get("sha")
+    except Exception:
+        pass
+
+    body: dict = {"message": f"sync meeting notes {output_name}", "content": encoded}
+    if sha:
+        body["sha"] = sha
+
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{repo}/contents/{file_path}",
+            data=json.dumps(body).encode("utf-8"),
+            headers=headers,
+            method="PUT",
+        )
+        with urllib.request.urlopen(req) as resp:
+            return resp.status in (200, 201)
+    except Exception:
+        return False
 
 
 def upload_to_notion(result: dict) -> str:
@@ -311,8 +359,13 @@ def main():
 
     print_summary(result)
 
-    output_path = save_output(result, input_file)
+    output_path, output_name = save_output(result, input_file)
     print(f"\n💾 JSON 저장: {output_path}")
+
+    if upload_to_github(result, output_name):
+        print(f"☁️  GitHub 업로드 완료: data/meeting-notes/{output_name}")
+    else:
+        print("⚠️  GitHub 업로드 실패 (GITHUB_TOKEN 확인)")
 
     if use_notion:
         print("📤 Notion 업로드 중...")

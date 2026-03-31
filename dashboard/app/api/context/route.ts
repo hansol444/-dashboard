@@ -3,26 +3,26 @@ import { NextRequest, NextResponse } from "next/server";
 /**
  * /api/context
  *
- * topicFile 기반으로 Notion Meeting Notes DB에서 관련 싱크를 검색해 반환.
+ * GitHub data/meeting-notes/ 에서 회의록 요약 JSON을 읽어
+ * topicFile 키워드와 매칭되는 싱크를 반환.
  *
- * 필요한 환경변수:
- *   NOTION_TOKEN — Notion Integration Token (secret_xxx)
- *   Vercel > Settings > Environment Variables에 추가
+ * NOTION_TOKEN 불필요 — GITHUB_TOKEN만 사용 (기존 설정 그대로)
  *
  * GET ?topicFile=regular/macro-update
  * Response: { results: [{ id, title, date, decisions, url }] }
  */
 
-const MEETING_NOTES_DB_ID = "32e7d8322b0480fbaa8dc84357e3ec10";
+const REPO = "IMHY-dev/-dashboard";
+const NOTES_DIR = "data/meeting-notes";
 
 const TOPIC_KEYWORDS: Record<string, string[]> = {
-  "regular/macro-update":       ["매크로", "KOSIS"],
-  "regular/macro-indicators":   ["매크로", "지표"],
-  "regular/placement-update":   ["플레이스먼트", "서베이", "설문"],
-  "regular/placement-analysis": ["플레이스먼트", "RMS"],
-  "fluid/ppt-work":             ["장표", "PPT", "번역"],
+  "regular/macro-update":       ["매크로", "KOSIS", "macro"],
+  "regular/macro-indicators":   ["매크로", "지표", "indicator"],
+  "regular/placement-update":   ["플레이스먼트", "서베이", "설문", "placement", "survey"],
+  "regular/placement-analysis": ["플레이스먼트", "RMS", "placement", "분석"],
+  "fluid/ppt-work":             ["장표", "PPT", "번역", "translate"],
   "fluid/academia-contract":    ["산학협력", "기프티콘", "계약"],
-  "budget/placement-concur":    ["플레이스먼트", "컨커"],
+  "budget/placement-concur":    ["플레이스먼트", "컨커", "concur"],
   "budget/enkoline-concur":     ["엔코라인", "통역"],
   "budget/consulting-concur":   ["컨설팅", "BCG"],
   "budget/law-firm":            ["법무법인"],
@@ -32,59 +32,80 @@ const TOPIC_KEYWORDS: Record<string, string[]> = {
   "budget/vendor-registration": ["공급사", "벤더"],
 };
 
-type NotionPage = {
-  id: string;
-  url: string;
-  properties: {
-    제목?: { title?: { plain_text: string }[] };
-    결정사항?: { rich_text?: { plain_text: string }[] };
-    일시?: { date?: { start: string } };
-  };
+type MeetingNote = {
+  meeting_date?: string;
+  summary?: string;
+  key_topics?: { topic: string; details: string; decisions?: string[] }[];
+  task_assignments?: { assignee: string; task: string; deadline?: string }[];
 };
 
-export async function GET(request: NextRequest) {
-  const topicFile = new URL(request.url).searchParams.get("topicFile") ?? "";
-  const notionToken = process.env.NOTION_TOKEN;
-
-  if (!notionToken) return NextResponse.json({ results: [] });
-
-  const keywords = TOPIC_KEYWORDS[topicFile] ?? [];
-  if (keywords.length === 0) return NextResponse.json({ results: [] });
-
-  // 키워드별 OR 필터 (제목 + 결정사항 모두 검색)
-  const filterConditions = keywords.flatMap((kw) => [
-    { property: "제목", title: { contains: kw } },
-    { property: "결정사항", rich_text: { contains: kw } },
-  ]);
-
+async function ghGet(path: string) {
+  const token = process.env.GITHUB_TOKEN;
   const res = await fetch(
-    `https://api.notion.com/v1/databases/${MEETING_NOTES_DB_ID}/query`,
+    `https://api.github.com/repos/${REPO}/contents/${path}`,
     {
-      method: "POST",
       headers: {
-        Authorization: `Bearer ${notionToken}`,
-        "Content-Type": "application/json",
-        "Notion-Version": "2022-06-28",
+        Authorization: `token ${token}`,
+        Accept: "application/vnd.github.v3+json",
       },
-      body: JSON.stringify({
-        filter: { or: filterConditions },
-        sorts: [{ property: "일시", direction: "descending" }],
-        page_size: 5,
-      }),
       cache: "no-store",
     }
   );
+  if (!res.ok) return null;
+  return res.json();
+}
 
-  if (!res.ok) return NextResponse.json({ results: [] });
+export async function GET(request: NextRequest) {
+  const topicFile = new URL(request.url).searchParams.get("topicFile") ?? "";
+  const keywords = TOPIC_KEYWORDS[topicFile] ?? [];
+  if (keywords.length === 0) return NextResponse.json({ results: [] });
 
-  const data = await res.json();
-  const results = (data.results ?? []).map((page: NotionPage) => ({
-    id: page.id,
-    title: page.properties?.제목?.title?.[0]?.plain_text ?? "",
-    date: page.properties?.일시?.date?.start ?? "",
-    decisions: page.properties?.결정사항?.rich_text?.map((r) => r.plain_text).join("") ?? "",
-    url: page.url,
-  }));
+  // data/meeting-notes/ 디렉토리 파일 목록
+  const dirData = await ghGet(NOTES_DIR);
+  if (!dirData || !Array.isArray(dirData)) return NextResponse.json({ results: [] });
+
+  const jsonFiles = dirData
+    .filter((f: { name: string }) => f.name.endsWith(".json"))
+    .sort((a: { name: string }, b: { name: string }) => b.name.localeCompare(a.name)) // 최신순
+    .slice(0, 20); // 최근 20개만
+
+  const results = [];
+
+  for (const file of jsonFiles) {
+    const fileData = await ghGet(`${NOTES_DIR}/${file.name}`);
+    if (!fileData?.content) continue;
+
+    let note: MeetingNote;
+    try {
+      const content = Buffer.from(fileData.content.replace(/\s/g, ""), "base64").toString("utf-8");
+      note = JSON.parse(content);
+    } catch {
+      continue;
+    }
+
+    // 키워드 매칭 (summary + key_topics)
+    const searchText = [
+      note.summary ?? "",
+      ...(note.key_topics ?? []).map((t) => `${t.topic} ${t.details}`),
+    ].join(" ").toLowerCase();
+
+    const matched = keywords.some((kw) => searchText.includes(kw.toLowerCase()));
+    if (!matched) continue;
+
+    const decisions = (note.key_topics ?? [])
+      .flatMap((t) => t.decisions ?? [])
+      .join(", ");
+
+    results.push({
+      id: file.name,
+      title: note.summary?.slice(0, 60) ?? file.name,
+      date: note.meeting_date ?? "",
+      decisions,
+      url: `https://github.com/${REPO}/blob/main/${NOTES_DIR}/${file.name}`,
+    });
+
+    if (results.length >= 5) break;
+  }
 
   return NextResponse.json({ results });
 }
