@@ -191,5 +191,16 @@
     "deadline": "미정",
     "status": "pending",
     "slackTs": "1774940148.854479"
+  },
+  {
+    "id": "slack-1774941036.026149",
+    "from": "이창준",
+    "to": "주호연",
+    "message": "님 짱짱",
+    "channel": "#section-전략추진실-창준님",
+    "timestamp": "2026. 3. 31. 오후 4:10:36",
+    "deadline": "미정",
+    "status": "pending",
+    "slackTs": "1774941036.026149"
   }
 ]
