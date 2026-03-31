@@ -169,5 +169,16 @@
     "deadline": "미정",
     "status": "pending",
     "slackTs": "1774933621.707699"
+  },
+  {
+    "id": "slack-1774934482.202719",
+    "from": "임성욱",
+    "to": "이창준",
+    "message": "*[Macro update]* 님",
+    "channel": "#section-전략추진실-창준님",
+    "timestamp": "2026. 3. 31. 오후 2:21:22",
+    "deadline": "미정",
+    "status": "pending",
+    "slackTs": "1774934482.202719"
   }
 ]
