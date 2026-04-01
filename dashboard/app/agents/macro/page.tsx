@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 
 interface Step {
@@ -11,78 +11,75 @@ interface Step {
 }
 
 export default function MacroAgent() {
+  const [kosisFile, setKosisFile] = useState<File | null>(null);
+  const [macroFile, setMacroFile] = useState<File | null>(null);
+  const [kosisPath, setKosisPath] = useState("");
+  const [macroPath, setMacroPath] = useState("");
+  const [outputPath, setOutputPath] = useState("");
+  const [filesUploaded, setFilesUploaded] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const kosisRef = useRef<HTMLInputElement>(null);
+  const macroRef = useRef<HTMLInputElement>(null);
+
   const [steps, setSteps] = useState<Step[]>([
-    { label: "KOSIS 파일 탐색", description: "SharePoint 폴더에서 최신 KOSIS 파일(산업_규모별_고용_*.xlsx)을 자동 탐색합니다.", status: "ready" },
-    { label: "데이터 읽기", description: "KOSIS 파일에서 새로 추가할 월과 지표 컬럼을 읽습니다.", status: "locked" },
-    { label: "Macro 엑셀 열기", description: "Macro Analysis 엑셀 워크북을 열어 기존 데이터를 확인합니다.", status: "locked" },
+    { label: "KOSIS 파일 검증", description: "업로드된 KOSIS 파일의 시트 구조와 데이터를 확인합니다.", status: "locked" },
+    { label: "데이터 읽기", description: "KOSIS 파일에서 카테고리별 지표 데이터를 읽습니다.", status: "locked" },
+    { label: "Macro 엑셀 열기", description: "Macro Analysis 엑셀 워크북의 시트 목록을 확인합니다.", status: "locked" },
     { label: "10개 시트 업데이트", description: "빈일자리·채용·근로자·입직자 (상용/임시일용) 10개 시트에 데이터를 매칭하여 입력합니다.", status: "locked" },
-    { label: "저장 완료", description: "변경된 엑셀 파일을 저장합니다.", status: "locked" },
+    { label: "저장 및 다운로드", description: "업데이트된 엑셀 파일을 저장하고 다운로드합니다.", status: "locked" },
   ]);
-  const [currentStep, setCurrentStep] = useState(0);
   const [running, setRunning] = useState(false);
+
+  const uploadFiles = async () => {
+    if (!kosisFile || !macroFile) return;
+    setUploading(true);
+
+    try {
+      const uploadOne = async (file: File) => {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/api/upload", { method: "POST", body: form });
+        return res.json();
+      };
+
+      const [kosisRes, macroRes] = await Promise.all([uploadOne(kosisFile), uploadOne(macroFile)]);
+
+      if (kosisRes.success && macroRes.success) {
+        setKosisPath(kosisRes.path);
+        setMacroPath(macroRes.path);
+        setFilesUploaded(true);
+        setSteps((prev) => prev.map((s, i) => (i === 0 ? { ...s, status: "ready" } : s)));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    setUploading(false);
+  };
 
   const runStep = async (stepIdx: number) => {
     setRunning(true);
-    // 현재 단계 running 표시
-    setSteps((prev) => prev.map((s, i) => (i === stepIdx ? { ...s, status: "running" } : s)));
+    setSteps((prev) => prev.map((s, i) => (i === stepIdx ? { ...s, status: "running", output: undefined } : s)));
 
-    // 첫 단계에서 전체 스크립트 실행 (결과를 단계별로 나눠 표시)
-    if (stepIdx === 0) {
-      try {
-        const res = await fetch("/api/agents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ topicFile: "regular/macro-update" }),
-        });
-        const data = await res.json();
+    try {
+      const res = await fetch("/api/agents/macro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kosisPath, macroPath, step: stepIdx + 1 }),
+      });
+      const data = await res.json();
 
-        if (data.success) {
-          const stdout = data.stdout || "";
-          const lines = stdout.split("\n").filter((l: string) => l.trim());
-
-          // 첫 단계 완료 + 출력
-          setSteps((prev) => prev.map((s, i) => (i === 0 ? { ...s, status: "done", output: lines.slice(0, 3).join("\n") || "KOSIS 파일 탐색 완료" } : s)));
-          setCurrentStep(1);
-
-          // 나머지 단계를 순차적으로 표시 (실제 결과를 나눠서)
-          const stepOutputs = [
-            lines.slice(3, 6).join("\n") || "데이터 읽기 완료",
-            lines.slice(6, 9).join("\n") || "Macro 엑셀 열기 완료",
-            lines.slice(9, 15).join("\n") || "10개 시트 업데이트 완료",
-            lines.slice(15).join("\n") || "저장 완료",
-          ];
-
-          for (let i = 1; i < 5; i++) {
-            await new Promise((r) => setTimeout(r, 800));
-            setSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, status: "ready" } : s)));
-            setCurrentStep(i);
-          }
-
-          // 모든 단계를 ready로 전환했으니, 사용자가 각각 클릭 가능
-          // 하지만 이미 실행은 끝난 상태이므로 출력만 보여주면 됨
-          setSteps((prev) =>
-            prev.map((s, i) => {
-              if (i === 0) return s; // 이미 done
-              return { ...s, status: "ready", output: stepOutputs[i - 1] };
-            })
-          );
-          setCurrentStep(1);
-        } else {
-          setSteps((prev) => prev.map((s, i) => (i === 0 ? { ...s, status: "error", output: data.stderr || data.error || "실행 실패" } : s)));
-        }
-      } catch (err) {
-        setSteps((prev) => prev.map((s, i) => (i === 0 ? { ...s, status: "error", output: `서버 연결 실패: ${err}` } : s)));
+      if (data.success) {
+        if (data.outputPath) setOutputPath(data.outputPath);
+        setSteps((prev) => prev.map((s, i) => {
+          if (i === stepIdx) return { ...s, status: "done", output: data.output };
+          if (i === stepIdx + 1 && s.status === "locked") return { ...s, status: "ready" };
+          return s;
+        }));
+      } else {
+        setSteps((prev) => prev.map((s, i) => (i === stepIdx ? { ...s, status: "error", output: data.error || "실패" } : s)));
       }
-    } else {
-      // 이미 실행 완료된 단계: 결과만 표시
-      await new Promise((r) => setTimeout(r, 300));
-      setSteps((prev) => prev.map((s, i) => (i === stepIdx ? { ...s, status: "done" } : s)));
-      setCurrentStep(stepIdx + 1);
-
-      // 다음 단계 unlock
-      if (stepIdx + 1 < steps.length) {
-        setSteps((prev) => prev.map((s, i) => (i === stepIdx + 1 && s.status === "locked" ? { ...s, status: "ready" } : s)));
-      }
+    } catch (err) {
+      setSteps((prev) => prev.map((s, i) => (i === stepIdx ? { ...s, status: "error", output: `서버 연결 실패: ${err}` } : s)));
     }
     setRunning(false);
   };
@@ -101,6 +98,47 @@ export default function MacroAgent() {
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
           KOSIS 데이터를 Macro Analysis 엑셀 10개 시트에 자동 반영합니다.
         </p>
+      </div>
+
+      {/* 파일 업로드 */}
+      <div className={`p-5 rounded-xl mb-6 border ${filesUploaded ? "border-green-500/30 bg-green-500/5" : "border-gray-600"}`} style={filesUploaded ? {} : { background: "var(--surface)" }}>
+        <h2 className="text-sm font-medium mb-3" style={{ color: "var(--text-muted)" }}>파일 업로드</h2>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">1. KOSIS 파일 (산업_규모별_고용_*.xlsx)</label>
+            <div className="flex gap-3">
+              <input ref={kosisRef} type="file" accept=".xlsx,.xls" className="hidden"
+                onChange={(e) => setKosisFile(e.target.files?.[0] || null)} />
+              <button onClick={() => kosisRef.current?.click()} disabled={filesUploaded}
+                className="flex-1 px-4 py-2.5 rounded-lg text-sm text-left bg-black border border-gray-700 text-white disabled:opacity-50 hover:border-gray-500 transition-all">
+                {kosisFile ? `📄 ${kosisFile.name}` : "파일 선택..."}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">2. Macro Analysis 엑셀</label>
+            <div className="flex gap-3">
+              <input ref={macroRef} type="file" accept=".xlsx,.xls" className="hidden"
+                onChange={(e) => setMacroFile(e.target.files?.[0] || null)} />
+              <button onClick={() => macroRef.current?.click()} disabled={filesUploaded}
+                className="flex-1 px-4 py-2.5 rounded-lg text-sm text-left bg-black border border-gray-700 text-white disabled:opacity-50 hover:border-gray-500 transition-all">
+                {macroFile ? `📄 ${macroFile.name}` : "파일 선택..."}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {!filesUploaded ? (
+          <button onClick={uploadFiles} disabled={!kosisFile || !macroFile || uploading}
+            className="mt-4 w-full px-6 py-2.5 rounded-lg text-sm font-medium text-black hover:opacity-80 disabled:opacity-30"
+            style={{ background: "var(--accent)" }}>
+            {uploading ? "⏳ 업로드 중..." : "업로드"}
+          </button>
+        ) : (
+          <div className="mt-3 text-sm text-green-400">✅ 파일 업로드 완료</div>
+        )}
       </div>
 
       {/* 단계별 진행 */}
@@ -138,27 +176,19 @@ export default function MacroAgent() {
                 </div>
 
                 {step.status === "ready" && (
-                  <button
-                    onClick={() => runStep(i)}
-                    disabled={running}
+                  <button onClick={() => runStep(i)} disabled={running}
                     className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${running ? "bg-gray-700 text-gray-500" : "text-black hover:opacity-80"}`}
-                    style={running ? {} : { background: "var(--accent)" }}
-                  >
+                    style={running ? {} : { background: "var(--accent)" }}>
                     {running ? "⏳" : "▶ 실행"}
                   </button>
                 )}
-                {step.status === "running" && (
-                  <span className="text-xs text-yellow-400 animate-pulse">실행 중...</span>
-                )}
+                {step.status === "running" && <span className="text-xs text-yellow-400 animate-pulse">실행 중...</span>}
               </div>
 
-              {/* 단계별 출력 */}
               {step.output && step.status !== "locked" && (
                 <div className={`mt-3 p-3 rounded-lg text-xs font-mono whitespace-pre-wrap ${
                   step.status === "error" ? "bg-red-500/10 text-red-300" : "bg-black/30 text-gray-300"
-                }`}>
-                  {step.output}
-                </div>
+                }`}>{step.output}</div>
               )}
             </div>
           </div>
@@ -168,7 +198,13 @@ export default function MacroAgent() {
       {allDone && (
         <div className="mt-6 p-5 rounded-xl bg-green-500/10 border border-green-500/30 text-center">
           <div className="text-green-400 font-medium mb-1">✅ Macro 업데이트 전체 완료</div>
-          <p className="text-xs text-gray-400">SharePoint의 Macro Analysis 엑셀을 확인하세요.</p>
+          {outputPath && (
+            <a href={`/api/download?path=${encodeURIComponent(outputPath)}`}
+              className="inline-block mt-3 px-6 py-2.5 rounded-lg text-sm font-medium text-black hover:opacity-80"
+              style={{ background: "var(--accent)" }}>
+              📥 결과 엑셀 다운로드
+            </a>
+          )}
         </div>
       )}
     </div>
