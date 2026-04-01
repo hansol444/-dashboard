@@ -50,17 +50,6 @@
     "topicFile": "regular/macro-update.md"
   },
   {
-    "id": "slack-1774920817.431479",
-    "from": "주호연",
-    "to": "이창준",
-    "message": "님, 2가지 작업으로 이해했습니다. 1번은 말씀해주신 장표 제작, 2번은 섹션 2 전략추진실 인턴 Claude code 에이전트 파트 발표 및 PPT 제작이 맞을까요?",
-    "channel": "#section-전략추진실-창준님",
-    "timestamp": "2026. 3. 31. 오전 10:33:37",
-    "deadline": "미정",
-    "status": "pending",
-    "slackTs": "1774920817.431479"
-  },
-  {
     "id": "slack-1774920838.629559",
     "from": "임성욱",
     "to": "방지수",
