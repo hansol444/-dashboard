@@ -180,16 +180,5 @@
     "deadline": "미정",
     "status": "pending",
     "slackTs": "1774934482.202719"
-  },
-  {
-    "id": "slack-1774940148.854479",
-    "from": "주호연",
-    "to": "이창준",
-    "message": "[Placement survey update]  님",
-    "channel": "#section-전략추진실-창준님",
-    "timestamp": "2026. 3. 31. 오후 3:55:48",
-    "deadline": "미정",
-    "status": "pending",
-    "slackTs": "1774940148.854479"
   }
 ]
