@@ -1,0 +1,30 @@
+{
+  "meeting_date": "2026-03-25",
+  "title": "AI 업무 전환 & 사업 분석 체계 Sync",
+  "participants": [
+    "팀원"
+  ],
+  "summary": "AI 업무 전환 방향과 사업 분석 체계 구축에 대한 싱크 회의. Claude 기반 업무 자동화 확대 및 대시보드 에이전트 통합 논의.",
+  "key_topics": [
+    {
+      "topic": "AI 업무 전환",
+      "details": "Claude API를 활용한 업무 자동화 범위 확대. PPT 번역, 매크로 업데이트, 회의록 요약 등 에이전트 파이프라인 구축.",
+      "decisions": [
+        "대시보드에 에이전트 통합",
+        "Vercel 배포 환경에서 가능한 기능만 실행"
+      ]
+    },
+    {
+      "topic": "사업 분석 체계",
+      "details": "KOSIS 데이터 기반 매크로 지표 분석 체계 정립. 분기별 Placement Survey 분석 자동화.",
+      "decisions": [
+        "매크로 분석 에이전트 로컬 실행 유지",
+        "Placement 분석 Python 파이프라인 유지"
+      ]
+    }
+  ],
+  "action_items": [
+    "대시보드 에이전트 통합 완료",
+    "Vercel 배포 테스트"
+  ]
+}
