@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
         const termList = Object.entries(TERMINOLOGY).map(([k, v]) => `${k} → ${v}`).join("\n");
 
         const resp = await client.messages.create({
-          model: "claude-sonnet-4-6-20250514",
+          model: "claude-sonnet-4-5-20250929",
           max_tokens: 4096,
           messages: [{
             role: "user",

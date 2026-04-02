@@ -64,8 +64,8 @@ const AGENT_CONFIGS: Record<string, {
   "fluid/meeting-notes": {
     command: "python meeting-notes/summarize.py",
     cwd: WORKSPACE,
-    description: "TXT 녹취록 → Claude 구조화 요약 → GitHub 저장",
-    steps: ["TXT 파일 읽기", "Claude 요약 생성", "업무지시 추출", "GitHub 저장"],
+    description: "TXT 녹취록 → Claude 구조화 요약 → Notion 등록",
+    steps: ["TXT 파일 읽기", "Claude 요약 생성", "업무지시 추출", "Notion 등록", "GitHub 저장"],
   },
 };
 
@@ -108,11 +108,14 @@ export async function POST(request: NextRequest) {
       // ppt-create 단발 모드: --input "text" --output "path"
       command = `${command} --input "${params.input}" --output "output/result_${Date.now()}.pptx"`;
     } else {
+      // 플래그 전용 파라미터 (값 없이 --key만 붙이는 경우)와 일반 파라미터 분리
+      const flags = Object.entries(params).filter(([, v]) => v === "__flag__").map(([k]) => `--${k}`);
       const extra = Object.entries(params)
-        .filter(([, v]) => v) // 빈 값 제외
+        .filter(([, v]) => v && v !== "__flag__")
         .map(([k, v]) => `--${k} "${v}"`)
         .join(" ");
-      if (extra) command = `${command} ${extra}`;
+      const flagStr = flags.join(" ");
+      if (extra || flagStr) command = `${command} ${extra} ${flagStr}`.replace(/\s+/g, " ").trim();
     }
   }
 
