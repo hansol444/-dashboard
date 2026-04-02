@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import PptxGenJS from "pptxgenjs";
+import { resolveFile } from "@/lib/file-utils";
 
 export async function POST(req: NextRequest) {
   try {
     const { jkPath, amPath, quarter, step } = await req.json();
+    const localJk = jkPath ? await resolveFile(jkPath) : "";
+    const localAm = amPath ? await resolveFile(amPath) : "";
 
     // Step 1: JK Raw 분류
     if (step === 1) {
       const wb = new ExcelJS.Workbook();
-      await wb.xlsx.readFile(jkPath);
+      await wb.xlsx.readFile(localJk);
       const sheetNames = wb.worksheets.map((s) => s.name);
       const rowCount = wb.worksheets[0]?.rowCount || 0;
       return NextResponse.json({
@@ -22,7 +25,7 @@ export async function POST(req: NextRequest) {
     // Step 2: AM Raw 분류
     if (step === 2) {
       const wb = new ExcelJS.Workbook();
-      await wb.xlsx.readFile(amPath);
+      await wb.xlsx.readFile(localAm);
       const sheetNames = wb.worksheets.map((s) => s.name);
       const rowCount = wb.worksheets[0]?.rowCount || 0;
       return NextResponse.json({
@@ -36,9 +39,9 @@ export async function POST(req: NextRequest) {
     if (step === 3) {
       // Read both workbooks and compute basic RMS
       const jkWb = new ExcelJS.Workbook();
-      await jkWb.xlsx.readFile(jkPath);
+      await jkWb.xlsx.readFile(localJk);
       const amWb = new ExcelJS.Workbook();
-      await amWb.xlsx.readFile(amPath);
+      await amWb.xlsx.readFile(localAm);
 
       const jkSheets = jkWb.worksheets.length;
       const amSheets = amWb.worksheets.length;

@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
+import { resolveFile } from "@/lib/file-utils";
 
 export async function POST(req: NextRequest) {
   try {
     const { kosisPath, macroPath, step } = await req.json();
+    // Resolve Blob URLs to local paths
+    const localKosis = kosisPath ? await resolveFile(kosisPath) : "";
+    const localMacro = macroPath ? await resolveFile(macroPath) : "";
 
     // Step-based execution
     if (step === 1) {
       // Step 1: Validate KOSIS file
       const wb = new ExcelJS.Workbook();
-      await wb.xlsx.readFile(kosisPath);
+      await wb.xlsx.readFile(localKosis);
       const sheetNames = wb.worksheets.map(s => s.name);
       const rowCount = wb.worksheets[0]?.rowCount || 0;
       return NextResponse.json({
@@ -22,7 +26,7 @@ export async function POST(req: NextRequest) {
     if (step === 2) {
       // Step 2: Read KOSIS data
       const wb = new ExcelJS.Workbook();
-      await wb.xlsx.readFile(kosisPath);
+      await wb.xlsx.readFile(localKosis);
       const ws = wb.worksheets[0];
       if (!ws) throw new Error("시트가 없습니다");
 
@@ -51,7 +55,7 @@ export async function POST(req: NextRequest) {
     if (step === 3) {
       // Step 3: Open Macro Analysis
       const wb = new ExcelJS.Workbook();
-      await wb.xlsx.readFile(macroPath);
+      await wb.xlsx.readFile(localMacro);
       const sheetNames = wb.worksheets.map(s => s.name);
       return NextResponse.json({
         success: true,
@@ -63,11 +67,11 @@ export async function POST(req: NextRequest) {
     if (step === 4) {
       // Step 4: Update all 10 sheets
       const kosisWb = new ExcelJS.Workbook();
-      await kosisWb.xlsx.readFile(kosisPath);
+      await kosisWb.xlsx.readFile(localKosis);
       const kosisWs = kosisWb.worksheets[0];
 
       const macroWb = new ExcelJS.Workbook();
-      await macroWb.xlsx.readFile(macroPath);
+      await macroWb.xlsx.readFile(localMacro);
 
       // Read KOSIS data into memory
       const kosisData: Record<string, (string | number | null)[]> = {};

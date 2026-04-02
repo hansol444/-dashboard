@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import PptxGenJS from "pptxgenjs";
+import { resolveFile, saveTempFile } from "@/lib/file-utils";
+import { readFile, writeFile } from "fs/promises";
+import os from "os";
+import path from "path";
 
 const TERMINOLOGY: Record<string, string> = {
   "사업추진본부": "Business Promotion Division",
@@ -34,22 +38,21 @@ export async function POST(req: NextRequest) {
     const { pptxPath, step } = await req.json();
 
     if (step === 1) {
-      // Step 1: Load PPTX and extract text
-      // Since we can't easily parse PPTX in serverless, we'll use a simpler approach
-      // Read the file and get basic info
-      const fs = await import("fs/promises");
-      const stat = await fs.stat(pptxPath);
+      // Step 1: Download from Blob URL → local /tmp
+      const localPath = await resolveFile(pptxPath);
+      const stat = await import("fs/promises").then(fs => fs.stat(localPath));
       return NextResponse.json({
         success: true, step: 1,
-        output: `PPT 파일 로드 완료\n파일 크기: ${(stat.size / 1024).toFixed(1)} KB`
+        output: `PPT 파일 로드 완료\n파일 크기: ${(stat.size / 1024).toFixed(1)} KB`,
+        localPath, // pass to subsequent steps
       });
     }
 
     if (step === 2) {
       // Step 2: Extract text from PPTX using JSZip
-      const fs = await import("fs/promises");
+      const localPath = await resolveFile(pptxPath);
       const JSZip = (await import("jszip")).default;
-      const buffer = await fs.readFile(pptxPath);
+      const buffer = await readFile(localPath);
       const zip = await JSZip.loadAsync(buffer);
 
       const slides: { slideNum: number; texts: string[] }[] = [];
@@ -57,7 +60,6 @@ export async function POST(req: NextRequest) {
 
       for (const slideFile of slideFiles) {
         const xml = await zip.files[slideFile].async("text");
-        // Extract text between <a:t> tags
         const texts: string[] = [];
         const regex = /<a:t>([^<]+)<\/a:t>/g;
         let match;
@@ -68,9 +70,7 @@ export async function POST(req: NextRequest) {
         slides.push({ slideNum, texts });
       }
 
-      // Store extracted data in /tmp for next steps
-      const dataPath = pptxPath.replace(/\.[^.]+$/, "_extracted.json");
-      await fs.writeFile(dataPath, JSON.stringify(slides, null, 2));
+      const dataPath = await saveTempFile("extracted.json", JSON.stringify(slides, null, 2));
 
       return NextResponse.json({
         success: true, step: 2,
@@ -80,7 +80,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (step === 3) {
-      // Step 3: Load terminology
       return NextResponse.json({
         success: true, step: 3,
         output: `용어집 로드 완료\n매칭 용어: ${Object.keys(TERMINOLOGY).length}개\n보존어: ${PRESERVE_WORDS.length}개`
@@ -88,16 +87,19 @@ export async function POST(req: NextRequest) {
     }
 
     if (step === 4) {
-      // Step 4: Translate with Claude API
       const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
+      if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set. Vercel 환경변수를 확인하세요.");
 
-      const fs = await import("fs/promises");
-      const dataPath = pptxPath.replace(/\.[^.]+$/, "_extracted.json");
-      const slides = JSON.parse(await fs.readFile(dataPath, "utf-8")) as { slideNum: number; texts: string[] }[];
+      const { dataPath } = await req.json().catch(() => ({ dataPath: "" }));
+      // Try to find extracted data
+      const tmpDir = os.tmpdir();
+      const files = await import("fs/promises").then(fs => fs.readdir(tmpDir));
+      const extractedFile = files.filter(f => f.includes("extracted.json")).sort().pop();
+      if (!extractedFile) throw new Error("텍스트 추출 데이터가 없습니다. Step 2를 먼저 실행하세요.");
+
+      const slides = JSON.parse(await readFile(path.join(tmpDir, extractedFile), "utf-8")) as { slideNum: number; texts: string[] }[];
 
       const client = new Anthropic({ apiKey });
-
       const translatedSlides: { slideNum: number; original: string[]; translated: string[] }[] = [];
 
       for (const slide of slides) {
@@ -107,7 +109,6 @@ export async function POST(req: NextRequest) {
         }
 
         const textsBlock = slide.texts.map((t, i) => `[${i}] ${t}`).join("\n");
-
         const termList = Object.entries(TERMINOLOGY).map(([k, v]) => `${k} → ${v}`).join("\n");
 
         const resp = await client.messages.create({
@@ -115,33 +116,30 @@ export async function POST(req: NextRequest) {
           max_tokens: 4096,
           messages: [{
             role: "user",
-            content: `Translate the following Korean presentation text to Australian English. This is HR/Recruitment domain content.
+            content: `Translate the following Korean presentation text to Australian English. HR/Recruitment domain.
 
-TERMINOLOGY (must use these exact translations):
+TERMINOLOGY:
 ${termList}
 
-PRESERVE these words as-is: ${PRESERVE_WORDS.join(", ")}
+PRESERVE: ${PRESERVE_WORDS.join(", ")}
 
 RULES:
-- Use Australian English spelling (organise, colour, behaviour, etc.)
-- Keep numbers and units intact
-- 억 = 100M or B (context-dependent), 조 = T
-- Keep bullet structure and formatting cues
-- Be concise - presentation text should be brief
-- If text is already English, keep it as-is
+- Australian English (organise, colour, behaviour)
+- Keep numbers/units, 억=100M/B, 조=T
+- Be concise for presentation
+- Already English → keep as-is
 
-TEXT TO TRANSLATE:
+TEXT:
 ${textsBlock}
 
-Return ONLY the translations in the same [N] format, one per line. No explanations.`
+Return ONLY [N] translations, one per line.`
           }]
         });
 
         const responseText = resp.content[0].type === "text" ? resp.content[0].text : "";
-        const translated: string[] = [...slide.texts]; // fallback to original
+        const translated: string[] = [...slide.texts];
 
-        const lines = responseText.split("\n");
-        for (const line of lines) {
+        for (const line of responseText.split("\n")) {
           const m = line.match(/^\[(\d+)\]\s*(.+)/);
           if (m) {
             const idx = parseInt(m[1]);
@@ -152,27 +150,28 @@ Return ONLY the translations in the same [N] format, one per line. No explanatio
         translatedSlides.push({ slideNum: slide.slideNum, original: slide.texts, translated });
       }
 
-      const transPath = pptxPath.replace(/\.[^.]+$/, "_translated.json");
-      await fs.writeFile(transPath, JSON.stringify(translatedSlides, null, 2));
+      const transPath = await saveTempFile("translated.json", JSON.stringify(translatedSlides, null, 2));
 
       return NextResponse.json({
         success: true, step: 4,
-        output: `번역 완료\n${translatedSlides.length}장 슬라이드 번역\nClaude API 호출: ${translatedSlides.filter(s => s.original.length > 0).length}회`,
+        output: `번역 완료\n${translatedSlides.length}장 슬라이드\nClaude API 호출: ${translatedSlides.filter(s => s.original.length > 0).length}회`,
         transPath
       });
     }
 
     if (step === 5) {
-      // Step 5: Post-processing
-      const fs = await import("fs/promises");
-      const transPath = pptxPath.replace(/\.[^.]+$/, "_translated.json");
-      const slides = JSON.parse(await fs.readFile(transPath, "utf-8"));
+      const tmpDir = os.tmpdir();
+      const files = await import("fs/promises").then(fs => fs.readdir(tmpDir));
+      const transFile = files.filter(f => f.includes("translated.json")).sort().pop();
+      if (!transFile) throw new Error("번역 데이터가 없습니다.");
+
+      const transPath = path.join(tmpDir, transFile);
+      const slides = JSON.parse(await readFile(transPath, "utf-8"));
 
       let fixes = 0;
       for (const slide of slides) {
         for (let i = 0; i < slide.translated.length; i++) {
           let t = slide.translated[i];
-          // Australian English fixes
           t = t.replace(/\borganize\b/gi, "organise");
           t = t.replace(/\borganization\b/gi, "organisation");
           t = t.replace(/\bcolor\b/gi, "colour");
@@ -184,7 +183,7 @@ Return ONLY the translations in the same [N] format, one per line. No explanatio
         }
       }
 
-      await fs.writeFile(transPath, JSON.stringify(slides, null, 2));
+      await writeFile(transPath, JSON.stringify(slides, null, 2));
 
       return NextResponse.json({
         success: true, step: 5,
@@ -193,38 +192,36 @@ Return ONLY the translations in the same [N] format, one per line. No explanatio
     }
 
     if (step === 6) {
-      // Step 6: Generate translated PPTX
-      const fs = await import("fs/promises");
-      const transPath = pptxPath.replace(/\.[^.]+$/, "_translated.json");
-      const slides = JSON.parse(await fs.readFile(transPath, "utf-8"));
+      const tmpDir = os.tmpdir();
+      const files = await import("fs/promises").then(fs => fs.readdir(tmpDir));
+      const transFile = files.filter(f => f.includes("translated.json")).sort().pop();
+      if (!transFile) throw new Error("번역 데이터가 없습니다.");
+
+      const slides = JSON.parse(await readFile(path.join(tmpDir, transFile), "utf-8"));
 
       const pptx = new PptxGenJS();
-      pptx.layout = "LAYOUT_WIDE"; // 16:9
+      pptx.layout = "LAYOUT_WIDE";
 
       for (const slide of slides) {
         const s = pptx.addSlide();
         if (slide.translated.length === 0) continue;
 
-        // First text as title
         s.addText(slide.translated[0] || "", {
           x: 0.5, y: 0.3, w: "90%", h: 0.8,
-          fontSize: 24, bold: true, color: "1B365D",
-          fontFace: "Calibri",
+          fontSize: 24, bold: true, color: "1B365D", fontFace: "Calibri",
         });
 
-        // Rest as body text
         if (slide.translated.length > 1) {
           const bodyTexts = slide.translated.slice(1).map((t: string) => ({
             text: t, options: { fontSize: 14, color: "333333", bullet: true, breakLine: true }
           }));
           s.addText(bodyTexts, {
-            x: 0.5, y: 1.3, w: "90%", h: "70%",
-            fontFace: "Calibri", valign: "top",
+            x: 0.5, y: 1.3, w: "90%", h: "70%", fontFace: "Calibri", valign: "top",
           });
         }
       }
 
-      const outputPath = `/tmp/${Date.now()}_translated.pptx`;
+      const outputPath = path.join(tmpDir, `${Date.now()}_translated.pptx`);
       await pptx.writeFile({ fileName: outputPath });
 
       return NextResponse.json({

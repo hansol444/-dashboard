@@ -37,6 +37,12 @@ export default function TranslateAgent() {
       const form = new FormData();
       form.append("file", pptxFile);
       const res = await fetch("/api/upload", { method: "POST", body: form });
+      if (!res.ok) {
+        const text = await res.text();
+        setUploadError(`업로드 실패 (HTTP ${res.status}): ${text.slice(0, 200)}`);
+        setUploading(false);
+        return;
+      }
       const data = await res.json();
       if (data.success) {
         setPptxPath(data.path);

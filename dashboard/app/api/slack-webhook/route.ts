@@ -519,6 +519,25 @@ export async function POST(request: NextRequest) {
   const cleanMessage = cleanSlackText(text);
   if (!cleanMessage) return NextResponse.json({ ok: true });
 
+  // ── 사담 필터링: Claude API로 업무 여부 판별 ──
+  try {
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000";
+    const filterRes = await fetch(`${baseUrl}/api/classify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: cleanMessage, checkWorkOnly: true }),
+    });
+    const filterData = await filterRes.json();
+    if (filterData.isWork === false) {
+      console.log(`[slack-webhook] 사담 필터링됨: "${cleanMessage.slice(0, 50)}"`);
+      return NextResponse.json({ ok: true });
+    }
+  } catch {
+    // 필터링 실패 시 안전하게 통과 (업무로 간주)
+  }
+
   const taskId = `slack-${ts}`;
   const task = {
     id: taskId,

@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
-import os from "os";
-
-// Vercel body size limit
-export const config = {
-  api: { bodyParser: false },
-};
+import { put } from "@vercel/blob";
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,18 +7,17 @@ export async function POST(req: NextRequest) {
     const file = formData.get("file") as File | null;
     if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    // Vercel Blob에 업로드 (크기 제한 없음)
+    const blob = await put(`agents/${Date.now()}_${file.name}`, file, {
+      access: "public",
+    });
 
-    // Use os.tmpdir() for cross-platform compatibility (Windows + Vercel Linux)
-    const tmpDir = os.tmpdir();
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const tmpPath = path.join(tmpDir, `${Date.now()}_${safeName}`);
-
-    await mkdir(tmpDir, { recursive: true }).catch(() => {});
-    await writeFile(tmpPath, buffer);
-
-    return NextResponse.json({ success: true, path: tmpPath, filename: file.name, size: buffer.length });
+    return NextResponse.json({
+      success: true,
+      path: blob.url,         // Blob URL
+      filename: file.name,
+      size: file.size,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

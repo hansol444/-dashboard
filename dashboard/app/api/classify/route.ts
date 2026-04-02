@@ -356,11 +356,61 @@ function classifyByKeyword(message: string) {
   return null;
 }
 
+// ─── 업무 vs 사담 판별 (Claude API) ───
+
+async function isWorkMessage(message: string): Promise<boolean> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return true; // API 키 없으면 안전하게 통과
+
+  const prompt = `당신은 사내 슬랙 메시지 필터입니다.
+아래 메시지가 **업무 지시/요청/보고**인지, **사담/잡담/인사/감정표현**인지 판별하세요.
+
+업무 메시지 예시: "이거 번역해줘", "매크로 업데이트 부탁", "26Q1 분석 언제 되나요", "품의서 올려주세요", "사용량 뛰는 분들은 업그레이드 해드리고 모니터링해야할 것 같습니다", "Process 설계해봐주세요"
+사담 메시지 예시: "점심 뭐 먹을까", "ㅋㅋㅋ 감사합니다", "고생했어요", "오늘 날씨 좋다", "주말에 뭐 했어?", "답변 늦었네요 논의 감사드립니다"
+
+## 메시지
+"${message.replace(/"/g, '\\"').slice(0, 300)}"
+
+## 응답 (JSON만, 다른 텍스트 없이)
+{"isWork": true} 또는 {"isWork": false}`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 32,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!res.ok) return true;
+
+    const data = await res.json();
+    const text: string = data?.content?.[0]?.text ?? "";
+    const parsed = JSON.parse(text.trim());
+    return parsed.isWork === true;
+  } catch {
+    return true; // 파싱 실패 시 안전하게 업무로 처리
+  }
+}
+
 // ─── 라우트 핸들러 ───
 
 export async function POST(request: NextRequest) {
-  const { message } = await request.json();
+  const { message, checkWorkOnly } = await request.json();
   if (!message) return NextResponse.json({ error: "message required" }, { status: 400 });
+
+  // 업무 여부만 판별하는 모드 (slack-webhook에서 호출)
+  if (checkWorkOnly) {
+    const isWork = await isWorkMessage(message);
+    return NextResponse.json({ isWork });
+  }
 
   // Claude API 분류 시도
   const claudeResult = await classifyWithClaude(message);
