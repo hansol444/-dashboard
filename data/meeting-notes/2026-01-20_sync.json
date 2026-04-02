@@ -1,0 +1,30 @@
+{
+  "meeting_date": "2026-01-20",
+  "title": "Placement 표본 분석 & 재계약 Sync",
+  "participants": [
+    "팀원"
+  ],
+  "summary": "Placement Survey 표본 분석 결과 검토 및 재계약 관련 논의.",
+  "key_topics": [
+    {
+      "topic": "Placement 표본 분석",
+      "details": "분기별 Placement Survey 표본 구성 및 분석 결과 검토. JK/AM/JP별 RMS 계산 방법론 확인.",
+      "decisions": [
+        "표본 기준 유지",
+        "RMS 계산 로직 검증 완료"
+      ]
+    },
+    {
+      "topic": "재계약",
+      "details": "Placement Survey 관련 협력사 재계약 논의.",
+      "decisions": [
+        "재계약 조건 검토",
+        "법무법인 의견 수렴"
+      ]
+    }
+  ],
+  "action_items": [
+    "Placement Survey 분석 보고서 완성",
+    "재계약 서류 준비"
+  ]
+}
