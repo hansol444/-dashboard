@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { upload } from "@vercel/blob/client";
 import Link from "next/link";
 
 interface Step {
@@ -37,20 +38,19 @@ export default function PlacementAgent() {
 
     try {
       const uploadOne = async (file: File) => {
-        const form = new FormData();
-        form.append("file", file);
-        const res = await fetch("/api/upload", { method: "POST", body: form });
-        return res.json();
+        const blob = await upload(file.name, file, {
+          access: "public",
+          handleUploadUrl: "/api/upload",
+        });
+        return blob;
       };
 
-      const [jkRes, amRes] = await Promise.all([uploadOne(jkFile), uploadOne(amFile)]);
+      const [jkBlob, amBlob] = await Promise.all([uploadOne(jkFile), uploadOne(amFile)]);
 
-      if (jkRes.success && amRes.success) {
-        setJkPath(jkRes.path);
-        setAmPath(amRes.path);
-        setInputConfirmed(true);
-        setSteps((prev) => prev.map((s, i) => (i === 0 ? { ...s, status: "ready" } : s)));
-      }
+      setJkPath(jkBlob.url);
+      setAmPath(amBlob.url);
+      setInputConfirmed(true);
+      setSteps((prev) => prev.map((s, i) => (i === 0 ? { ...s, status: "ready" } : s)));
     } catch (err) {
       console.error(err);
     }

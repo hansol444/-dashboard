@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { upload } from "@vercel/blob/client";
 import Link from "next/link";
 
 interface Step {
@@ -36,20 +37,19 @@ export default function MacroAgent() {
 
     try {
       const uploadOne = async (file: File) => {
-        const form = new FormData();
-        form.append("file", file);
-        const res = await fetch("/api/upload", { method: "POST", body: form });
-        return res.json();
+        const blob = await upload(file.name, file, {
+          access: "public",
+          handleUploadUrl: "/api/upload",
+        });
+        return blob;
       };
 
-      const [kosisRes, macroRes] = await Promise.all([uploadOne(kosisFile), uploadOne(macroFile)]);
+      const [kosisBlob, macroBlob] = await Promise.all([uploadOne(kosisFile), uploadOne(macroFile)]);
 
-      if (kosisRes.success && macroRes.success) {
-        setKosisPath(kosisRes.path);
-        setMacroPath(macroRes.path);
-        setFilesUploaded(true);
-        setSteps((prev) => prev.map((s, i) => (i === 0 ? { ...s, status: "ready" } : s)));
-      }
+      setKosisPath(kosisBlob.url);
+      setMacroPath(macroBlob.url);
+      setFilesUploaded(true);
+      setSteps((prev) => prev.map((s, i) => (i === 0 ? { ...s, status: "ready" } : s)));
     } catch (err) {
       console.error(err);
     }

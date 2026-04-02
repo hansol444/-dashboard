@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { upload } from "@vercel/blob/client";
 import Link from "next/link";
 
 interface Step {
@@ -34,23 +35,14 @@ export default function TranslateAgent() {
     setUploading(true);
     setUploadError("");
     try {
-      const form = new FormData();
-      form.append("file", pptxFile);
-      const res = await fetch("/api/upload", { method: "POST", body: form });
-      if (!res.ok) {
-        const text = await res.text();
-        setUploadError(`업로드 실패 (HTTP ${res.status}): ${text.slice(0, 200)}`);
-        setUploading(false);
-        return;
-      }
-      const data = await res.json();
-      if (data.success) {
-        setPptxPath(data.path);
-        setFileUploaded(true);
-        setSteps((prev) => prev.map((s, i) => (i === 0 ? { ...s, status: "ready" } : s)));
-      } else {
-        setUploadError(data.error || `업로드 실패 (HTTP ${res.status})`);
-      }
+      // 브라우저 → Vercel Blob 직접 업로드 (API 크기 제한 우회)
+      const blob = await upload(pptxFile.name, pptxFile, {
+        access: "public",
+        handleUploadUrl: "/api/upload",
+      });
+      setPptxPath(blob.url);
+      setFileUploaded(true);
+      setSteps((prev) => prev.map((s, i) => (i === 0 ? { ...s, status: "ready" } : s)));
     } catch (err) {
       setUploadError(`업로드 에러: ${err}`);
     }
