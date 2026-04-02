@@ -50,17 +50,6 @@
     "topicFile": "regular/macro-update.md"
   },
   {
-    "id": "slack-1775094146.903699",
-    "from": "U08FBHBEVQ8",
-    "to": "주호연",
-    "message": "++  님. 현재 방지수(AD Product팀 PO)님께서 관리 중인 사업추진본부 클로드 Team 계정의 Host를 호연님께 인계하여 드려도 괜찮으실까요? 이미 어드민 계정이실 듯 한데, Host 계정으로의 인계 입니다.\n\n사유는 Product 조직에서 클로드 팀 계정을 운영하게 되며 방지수님이 out 하게 된 점 입니다.",
-    "channel": "#wg-사업성장팀x전략추진실",
-    "timestamp": "2026. 4. 2. 오전 10:42:26",
-    "deadline": "미정",
-    "status": "pending",
-    "slackTs": "1775094146.903699"
-  },
-  {
     "id": "slack-1775095338.023579",
     "from": "이창준",
     "to": "주호연",
