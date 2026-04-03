@@ -143,5 +143,16 @@
     "deadline": "미정",
     "status": "pending",
     "slackTs": "1775189973.189329"
+  },
+  {
+    "id": "slack-1775190063.858529",
+    "from": "임한솔",
+    "to": "김범석",
+    "message": "님, 네 여유 있습니다! 편하게 말씀해주세요",
+    "channel": "C09868K0QJJ",
+    "timestamp": "2026. 4. 3. 오후 1:21:03",
+    "deadline": "미정",
+    "status": "pending",
+    "slackTs": "1775190063.858529"
   }
 ]
