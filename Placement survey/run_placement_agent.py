@@ -18,7 +18,7 @@ import subprocess
 import shutil
 from pathlib import Path
 
-BASE_DIR = Path(r"C:\Users\ugin35\Desktop\Placement survey 자동화 revive")
+BASE_DIR = Path(r"C:\Users\olivia408\projects\-dashboard\Placement survey")
 
 # 전체 분기 목록 (필요 시 여기에 추가)
 ALL_JK_QUARTERS = [

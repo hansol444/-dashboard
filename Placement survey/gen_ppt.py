@@ -134,7 +134,7 @@ def apply_line_colors(chart, color_map):
 # ============================================================
 # Config
 # ============================================================
-BASE_DIR = Path(r"C:\Users\ugin35\Desktop\Placement survey 자동화 revive")
+BASE_DIR = Path(r"C:\Users\olivia408\projects\-dashboard\Placement survey")
 TEMPLATE = BASE_DIR / "Placement Survey_25Q3.pptx"
 JK_RMS = BASE_DIR / "JK 전체" / "25Q4_JK_RMS_v4.xlsx"
 AM_RMS = BASE_DIR / "AM 전체" / "25Q4_AM_RMS_v3.xlsx"

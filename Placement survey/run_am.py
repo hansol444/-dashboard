@@ -13,7 +13,7 @@ from pathlib import Path
 # ============================================================
 # Configuration
 # ============================================================
-BASE_DIR = Path(r"C:\Users\ugin35\Desktop\Placement survey 자동화 revive")
+BASE_DIR = Path(r"C:\Users\olivia408\projects\-dashboard\Placement survey")
 AM_DIR = BASE_DIR / "AM 전체"
 CLASSIFICATION_FILE = AM_DIR / "25Q4_AM_분류표.xlsx"
 

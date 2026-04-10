@@ -34,7 +34,7 @@ CUBICLE_ORDER = [
 ]
 
 # AM 분류표 경로 (Population weight 로드용)
-AM_CLASSIFICATION = Path(r"C:\Users\ugin35\Desktop\Placement survey 자동화 revive\AM 전체\25Q4_AM_분류표.xlsx")
+AM_CLASSIFICATION = Path(r"C:\Users\olivia408\projects\-dashboard\Placement survey\AM 전체\25Q4_AM_분류표.xlsx")
 
 SCOPES = [
     ('전체 (Online+Offline)', CHANNELS),

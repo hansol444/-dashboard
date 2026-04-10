@@ -197,12 +197,12 @@ def audit_file(filepath, label):
     return bugs
 
 jk_bugs = audit_file(
-    r"c:\Users\ugin35\Desktop\Placement survey 자동화 revive\JK 전체\25Q4_JK 잡플레이스먼트 분석_v0.xlsx",
+    r"C:\Users\olivia408\projects\-dashboard\Placement survey\JK 전체\25Q4_JK 잡플레이스먼트 분석_v0.xlsx",
     "JK File"
 )
 
 am_bugs = audit_file(
-    r"c:\Users\ugin35\Desktop\Placement survey 자동화 revive\AM 전체\25Q4_AM 잡플레이스먼트 분석_v0.xlsx",
+    r"C:\Users\olivia408\projects\-dashboard\Placement survey\AM 전체\25Q4_AM 잡플레이스먼트 분석_v0.xlsx",
     "AM File"
 )
 
